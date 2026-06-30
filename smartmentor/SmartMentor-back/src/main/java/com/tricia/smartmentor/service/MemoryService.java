@@ -44,13 +44,20 @@ public class MemoryService {
     private final int recallTopK;
     private final double similarityThreshold;
 
-    /** 召回超时执行器：embed/DB 慢时由它兜底超时，避免阻塞首包。 */
+    /**
+     * 召回超时执行器：embed/DB 慢时由它兜底超时，避免阻塞首包。
+     * <b>有界</b>线程数与队列：卡顿堆积时新召回直接被拒（降级跳过），
+     * 绝不无限增长 memory-recall 线程或排队拖慢对话。
+     */
     private final ExecutorService recallExecutor =
-            Executors.newCachedThreadPool(r -> {
-                Thread t = new Thread(r, "memory-recall");
-                t.setDaemon(true);
-                return t;
-            });
+            new ThreadPoolExecutor(2, 4, 60L, TimeUnit.SECONDS,
+                    new ArrayBlockingQueue<>(16),
+                    r -> {
+                        Thread t = new Thread(r, "memory-recall");
+                        t.setDaemon(true);
+                        return t;
+                    },
+                    new ThreadPoolExecutor.AbortPolicy());
 
     public MemoryService(StudentMemoryRepository memoryRepository,
                          LlmService llmService,
@@ -82,14 +89,26 @@ public class MemoryService {
         if (!memoryEnabled || studentId == null || query == null || query.isBlank()) {
             return "";
         }
+        Future<String> future = null;
         try {
             // 整段召回（含可能的远程 embed + DB 查询）包在超时里，超时即放弃
-            Future<String> future = recallExecutor.submit(() -> doRecall(studentId, query));
+            future = recallExecutor.submit(() -> doRecall(studentId, query));
             return future.get(recallTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
+            // 超时：中断底层任务（embed/DB），避免它在调用方走后继续占用线程和远程配额。
+            // ponytail: cancel(true) 对阻塞中的 JDBC 读无效（不响应中断），真正的堆积兜底是有界线程池；
+            //           若将来 embed 走 HTTP，可在客户端侧设更短的读超时进一步收紧。
+            future.cancel(true);
             log.debug("记忆召回超时({}ms)，本轮跳过", recallTimeoutMs);
             return "";
+        } catch (RejectedExecutionException e) {
+            // 线程池/队列已满（卡顿堆积）：直接降级跳过，不拖慢对话
+            log.debug("记忆召回线程池繁忙，本轮跳过");
+            return "";
         } catch (Exception e) {
+            if (future != null) {
+                future.cancel(true);
+            }
             log.debug("记忆召回失败（忽略）: {}", e.getMessage());
             return "";
         }
