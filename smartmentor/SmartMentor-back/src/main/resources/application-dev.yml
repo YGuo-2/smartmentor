@@ -1,0 +1,59 @@
+# ============================
+# 开发环境配置
+# ============================
+
+smartmentor:
+  server:
+    port: 8080
+  db:
+    host: ${SMARTMENTOR_DB_HOST:localhost}
+    port: ${SMARTMENTOR_DB_PORT:3306}
+    name: ${SMARTMENTOR_DB_NAME:smartmentor}
+    username: ${SMARTMENTOR_DB_USERNAME:root}
+    password: ${SMARTMENTOR_DB_PASSWORD:}
+  redis:
+    host: ${SMARTMENTOR_REDIS_HOST:127.0.0.1}
+    port: ${SMARTMENTOR_REDIS_PORT:6379}
+    password: ${SMARTMENTOR_REDIS_PASSWORD:}
+    database: ${SMARTMENTOR_REDIS_DATABASE:11}
+  jwt:
+    secret: ${SMARTMENTOR_JWT_SECRET:SmartMentorDevOnlyChangeMeSecretKeyForJWTTokenGeneration2026}
+    expiration: ${SMARTMENTOR_JWT_EXPIRATION:86400000}
+  mail:
+    host: ${SMARTMENTOR_MAIL_HOST:smtp.qq.com}
+    port: ${SMARTMENTOR_MAIL_PORT:465}
+    username: ${SMARTMENTOR_MAIL_USERNAME:}
+    password: ${SMARTMENTOR_MAIL_PASSWORD:}
+    protocol: ${SMARTMENTOR_MAIL_PROTOCOL:smtps}
+  # 讯飞星火大模型（OpenAI 兼容 HTTP 接口）。api-key 填控制台的 HTTP APIPassword。
+  spark:
+    api-key: ${SMARTMENTOR_SPARK_API_KEY:}
+    base-url: ${SMARTMENTOR_SPARK_BASE_URL:https://spark-api-open.xf-yun.com}
+    model: ${SMARTMENTOR_SPARK_MODEL:4.0Ultra}
+  # DeepSeek 大模型（OpenAI 兼容 HTTP 接口），作为星火不可用时的备用通道。
+  deepseek:
+    api-key: ${SMARTMENTOR_DEEPSEEK_API_KEY:}
+    base-url: ${SMARTMENTOR_DEEPSEEK_BASE_URL:https://api.deepseek.com}
+    model: ${SMARTMENTOR_DEEPSEEK_MODEL:deepseek-chat}
+  # 大模型适配层：provider 选择主用提供商（spark/deepseek），主用不可用时按需回退另一家。
+  llm:
+    provider: ${SMARTMENTOR_LLM_PROVIDER:deepseek}
+    fallback-enabled: ${SMARTMENTOR_LLM_FALLBACK_ENABLED:true}
+  demo:
+    offline-agent-enabled: ${SMARTMENTOR_OFFLINE_DEMO_ENABLED:false}
+  bilibili:
+    enabled: ${SMARTMENTOR_BILIBILI_ENABLED:true}
+    preferred-authors: ${SMARTMENTOR_BILIBILI_PREFERRED_AUTHORS:中国大学MOOC,学堂在线,北京大学,清华大学,浙江大学,慕课网}
+  animation-ai:
+    enabled: ${SMARTMENTOR_ANIMATION_AI_ENABLED:false}
+    provider: ${SMARTMENTOR_ANIMATION_AI_PROVIDER:runtime-svg}
+    base-url: ${SMARTMENTOR_ANIMATION_AI_BASE_URL:}
+    api-key: ${SMARTMENTOR_ANIMATION_AI_API_KEY:}
+    model: ${SMARTMENTOR_ANIMATION_AI_MODEL:}
+
+animation-ai:
+  enabled: ${smartmentor.animation-ai.enabled:false}
+  provider: ${smartmentor.animation-ai.provider:runtime-svg}
+  base-url: ${smartmentor.animation-ai.base-url:}
+  api-key: ${smartmentor.animation-ai.api-key:}
+  model: ${smartmentor.animation-ai.model:}

@@ -1,0 +1,77 @@
+server:
+  port: ${smartmentor.server.port}
+
+spring:
+  profiles:
+    active: dev
+  datasource:
+    url: jdbc:mysql://${smartmentor.db.host}:${smartmentor.db.port}/${smartmentor.db.name}?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
+    username: ${smartmentor.db.username}
+    password: ${smartmentor.db.password}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+    open-in-view: false
+  jackson:
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+  redis:
+    host: ${smartmentor.redis.host}
+    port: ${smartmentor.redis.port}
+    password: ${smartmentor.redis.password}
+    database: ${smartmentor.redis.database}
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 3000ms
+  mail:
+    host: ${smartmentor.mail.host}
+    port: ${smartmentor.mail.port}
+    username: ${smartmentor.mail.username}
+    password: ${smartmentor.mail.password}
+    protocol: ${smartmentor.mail.protocol}
+    properties:
+      mail:
+        smtp:
+          ssl:
+            enable: true
+
+jwt:
+  secret: ${smartmentor.jwt.secret}
+  expiration: ${smartmentor.jwt.expiration}
+
+
+# 讯飞星火大模型（OpenAI 兼容 HTTP 接口）。api-key 填控制台的 HTTP APIPassword。
+spark:
+  api-key: ${smartmentor.spark.api-key:}
+  base-url: ${smartmentor.spark.base-url:https://spark-api-open.xf-yun.com}
+  model: ${smartmentor.spark.model:4.0Ultra}
+
+# DeepSeek 大模型（OpenAI 兼容 HTTP 接口），作为星火不可用时的备用通道。
+deepseek:
+  api-key: ${smartmentor.deepseek.api-key:}
+  base-url: ${smartmentor.deepseek.base-url:https://api.deepseek.com}
+  model: ${smartmentor.deepseek.model:deepseek-chat}
+
+# 大模型适配层：provider 选择主用提供商（spark/deepseek），主用不可用时按需回退另一家。
+llm:
+  provider: ${smartmentor.llm.provider:deepseek}
+  fallback-enabled: ${smartmentor.llm.fallback-enabled:true}
+
+# 动画生成 AI：默认关闭外部文生视频服务，前端使用 runtime-svg 实时动画。
+# 若要接入真实动画/视频生成服务，配置 provider/base-url/api-key/model 即可。
+animation-ai:
+  enabled: ${smartmentor.animation-ai.enabled:false}
+  provider: ${smartmentor.animation-ai.provider:runtime-svg}
+  base-url: ${smartmentor.animation-ai.base-url:}
+  api-key: ${smartmentor.animation-ai.api-key:}
+  model: ${smartmentor.animation-ai.model:}

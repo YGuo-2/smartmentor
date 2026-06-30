@@ -1,0 +1,80 @@
+[
+  {
+    "id": "jw_http_basic",
+    "name": "HTTP 与 Web 基础",
+    "module": "Java Web 开发",
+    "description": "理解 HTTP 方法、状态码、请求响应结构和前后端交互流程。",
+    "prerequisites": [],
+    "difficulty": 0.3,
+    "examWeight": 0.65,
+    "estimatedMinutes": 35,
+    "commonErrors": ["混淆 GET 与 POST 的语义", "不能根据状态码定位问题"],
+    "errorTypes": ["protocol_confusion", "debugging_error"],
+    "teachingTips": "用浏览器 Network 面板观察一次登录请求。"
+  },
+  {
+    "id": "jw_spring_boot",
+    "name": "Spring Boot 基础",
+    "module": "Java Web 开发",
+    "description": "掌握 Controller、Service、Repository 分层和 Spring Boot 自动配置基础。",
+    "prerequisites": ["jw_http_basic"],
+    "difficulty": 0.5,
+    "examWeight": 0.8,
+    "estimatedMinutes": 60,
+    "commonErrors": ["Controller 中堆积业务逻辑", "注解使用位置错误"],
+    "errorTypes": ["architecture_error", "annotation_error"],
+    "teachingTips": "用用户登录接口演示三层职责边界。"
+  },
+  {
+    "id": "jw_rest_api",
+    "name": "REST API 设计",
+    "module": "Java Web 开发",
+    "description": "理解资源路径、请求方法、参数校验、统一响应和错误处理。",
+    "prerequisites": ["jw_http_basic", "jw_spring_boot"],
+    "difficulty": 0.55,
+    "examWeight": 0.75,
+    "estimatedMinutes": 50,
+    "commonErrors": ["路径命名混乱", "错误码和业务异常没有统一处理"],
+    "errorTypes": ["api_design_error", "exception_handling_error"],
+    "teachingTips": "用课程资源 CRUD 接口设计练习 REST 风格。"
+  },
+  {
+    "id": "jw_database",
+    "name": "数据库与 ORM",
+    "module": "Java Web 开发",
+    "description": "掌握实体映射、Repository 查询、事务和基础数据库设计。",
+    "prerequisites": ["jw_spring_boot"],
+    "difficulty": 0.6,
+    "examWeight": 0.8,
+    "estimatedMinutes": 65,
+    "commonErrors": ["实体字段和表字段不一致", "事务边界设置不清"],
+    "errorTypes": ["schema_mapping_error", "transaction_error"],
+    "teachingTips": "用学生画像表演示实体、DTO 和 SQL 的对应关系。"
+  },
+  {
+    "id": "jw_vue_integration",
+    "name": "Vue 前后端集成",
+    "module": "Java Web 开发",
+    "description": "理解 Vue 页面状态、接口请求、表单绑定和错误提示。",
+    "prerequisites": ["jw_rest_api"],
+    "difficulty": 0.55,
+    "examWeight": 0.7,
+    "estimatedMinutes": 55,
+    "commonErrors": ["接口返回结构理解错误", "表单字段和后端 DTO 不一致"],
+    "errorTypes": ["frontend_binding_error", "contract_error"],
+    "teachingTips": "用画像设置表单演示 v-model 到后端 DTO 的链路。"
+  },
+  {
+    "id": "jw_auth_security",
+    "name": "认证与安全",
+    "module": "Java Web 开发",
+    "description": "理解 JWT、登录鉴权、角色权限、接口保护和基础安全风险。",
+    "prerequisites": ["jw_rest_api", "jw_database"],
+    "difficulty": 0.7,
+    "examWeight": 0.75,
+    "estimatedMinutes": 70,
+    "commonErrors": ["Token 过期处理不完整", "接口权限控制遗漏"],
+    "errorTypes": ["auth_error", "permission_error"],
+    "teachingTips": "用登录用户和未登录用户的访问差异说明权限边界。"
+  }
+]

@@ -1,0 +1,39 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:smartmentor_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+    show-sql: false
+  main:
+    allow-bean-definition-overriding: true
+  mail:
+    host: localhost
+    port: 2525
+    username: test
+    password: test
+    protocol: smtp
+
+jwt:
+  secret: SmartMentorSecretKeyForJWTTokenGeneration2026VeryLongSecureKey
+  expiration: 86400000
+
+spark:
+  api-key: test-api-key
+  base-url: http://localhost
+  model: test-model
+
+deepseek:
+  api-key: test-api-key
+  base-url: http://localhost
+  model: test-model
+
+llm:
+  provider: spark
+  fallback-enabled: true

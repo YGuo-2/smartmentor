@@ -1,0 +1,80 @@
+[
+  {
+    "id": "ai_intro",
+    "name": "人工智能概述",
+    "module": "人工智能基础",
+    "description": "理解人工智能的发展脉络、典型任务、应用场景和系统边界。",
+    "prerequisites": [],
+    "difficulty": 0.25,
+    "examWeight": 0.5,
+    "estimatedMinutes": 30,
+    "commonErrors": ["将人工智能等同于单一大模型", "忽视数据、算法、算力和场景之间的关系"],
+    "errorTypes": ["concept_confusion", "scope_misunderstanding"],
+    "teachingTips": "从搜索、学习、感知、推理四类任务建立整体框架。"
+  },
+  {
+    "id": "ai_search",
+    "name": "搜索算法基础",
+    "module": "人工智能基础",
+    "description": "掌握状态空间、启发式搜索、广度优先、深度优先和 A* 搜索的基本思想。",
+    "prerequisites": ["ai_intro"],
+    "difficulty": 0.45,
+    "examWeight": 0.7,
+    "estimatedMinutes": 45,
+    "commonErrors": ["混淆 BFS 与 DFS 的扩展顺序", "不能解释启发式函数对搜索效率的影响"],
+    "errorTypes": ["algorithm_confusion", "reasoning_error"],
+    "teachingTips": "用迷宫路径和任务规划示例解释状态转移与代价函数。"
+  },
+  {
+    "id": "ai_knowledge_representation",
+    "name": "知识表示与推理",
+    "module": "人工智能基础",
+    "description": "理解命题逻辑、谓词逻辑、规则表示和知识图谱的基本用途。",
+    "prerequisites": ["ai_intro"],
+    "difficulty": 0.5,
+    "examWeight": 0.65,
+    "estimatedMinutes": 45,
+    "commonErrors": ["不能区分事实、规则和推理结论", "知识图谱三元组方向写反"],
+    "errorTypes": ["representation_error", "logic_error"],
+    "teachingTips": "用课程选课、疾病诊断等场景构造事实和规则。"
+  },
+  {
+    "id": "ai_ml_basic",
+    "name": "机器学习基础",
+    "module": "人工智能基础",
+    "description": "理解训练集、测试集、特征、标签、监督学习和无监督学习等核心概念。",
+    "prerequisites": ["ai_intro"],
+    "difficulty": 0.55,
+    "examWeight": 0.85,
+    "estimatedMinutes": 60,
+    "commonErrors": ["混淆训练误差和测试误差", "不能判断任务属于分类还是回归"],
+    "errorTypes": ["task_type_error", "evaluation_confusion"],
+    "teachingTips": "用鸢尾花分类和房价预测示例区分分类与回归。"
+  },
+  {
+    "id": "ai_neural_network",
+    "name": "神经网络基础",
+    "module": "人工智能基础",
+    "description": "理解神经元、激活函数、前向传播、损失函数和参数更新的基本过程。",
+    "prerequisites": ["ai_ml_basic"],
+    "difficulty": 0.7,
+    "examWeight": 0.8,
+    "estimatedMinutes": 70,
+    "commonErrors": ["把激活函数当作损失函数", "不能解释前向传播和反向传播的关系"],
+    "errorTypes": ["model_structure_error", "process_confusion"],
+    "teachingTips": "用输入层、隐藏层、输出层的流程图解释信息流。"
+  },
+  {
+    "id": "ai_agent_basic",
+    "name": "大模型与智能体基础",
+    "module": "人工智能基础",
+    "description": "理解大模型、提示词、工具调用、规划、记忆和多智能体协作的基础概念。",
+    "prerequisites": ["ai_ml_basic", "ai_knowledge_representation"],
+    "difficulty": 0.65,
+    "examWeight": 0.75,
+    "estimatedMinutes": 60,
+    "commonErrors": ["认为智能体只是普通聊天机器人", "忽视工具调用和任务规划的重要性"],
+    "errorTypes": ["agent_concept_error", "workflow_error"],
+    "teachingTips": "用学习助手、代码助手、检索助手协作完成任务的例子说明多智能体。"
+  }
+]

@@ -1,0 +1,24 @@
+# Java / Maven
+SmartMentor-back/target/
+SmartMentor-back/.mvn/wrapper/maven-wrapper.jar
+
+# Node / Vite
+smartmentor-web/node_modules/
+smartmentor-web/dist/
+
+# Logs and generated QA output
+*.log
+smartmentor-web/output/
+
+# Environment and secrets
+.env
+*.env
+!.env.example
+SmartMentor-back/.env
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+Thumbs.db
+.DS_Store

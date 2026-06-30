@@ -1,0 +1,58 @@
+:root {
+  /* Academic Colors */
+  --bg: #fdfcf9; /* Parchment White */
+  --bg-alt: #f4f1e9; /* Light Cream */
+  --text: #0b1829; /* Deep Ink */
+  --text-secondary: #4a5568; 
+  --text-muted: #8b98a5;
+  
+  /* Primary & Accent */
+  --primary: #112240; /* Oxford Navy */
+  --accent: #c5a059; /* Scholar Gold */
+  --accent-hover: #a88748;
+  --accent-gradient: linear-gradient(135deg, #112240 0%, #1e3a68 100%);
+  --accent-light: rgba(197, 160, 89, 0.15);
+  --primary-light: rgba(17, 34, 64, 0.08);
+  
+  /* Cards & Borders */
+  --card-bg: #ffffff;
+  --card-bg-solid: #ffffff;
+  --border: #e2e0d8;
+  --border-hover: #c4c1b5;
+  --glass-border: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+  
+  /* Semantic Colors */
+  --success: #276749; /* Ivy Green */
+  --success-light: rgba(39, 103, 73, 0.1);
+  --danger: #9b2c2c; /* Crimson Red */
+  --danger-light: rgba(155, 44, 44, 0.1);
+  --info: #2b6cb0;
+  --info-light: rgba(43, 108, 176, 0.1);
+  --purple: #553c9a;
+  --purple-light: rgba(85, 60, 154, 0.1);
+  --cyan: #285e61;
+  --cyan-light: rgba(40, 94, 97, 0.1);
+  --warning: #c5a059;
+  --warning-light: rgba(197, 160, 89, 0.1);
+  
+  /* Shadows - Diffused & Elegant */
+  --shadow-sm: 0 2px 4px rgba(17, 34, 64, 0.04);
+  --shadow-md: 0 8px 16px rgba(17, 34, 64, 0.06), 0 2px 4px rgba(17, 34, 64, 0.04);
+  --shadow-lg: 0 16px 32px rgba(17, 34, 64, 0.08), 0 4px 12px rgba(17, 34, 64, 0.04);
+  --shadow-xl: 0 24px 48px rgba(17, 34, 64, 0.12), 0 12px 24px rgba(17, 34, 64, 0.06);
+  
+  /* Radii - More traditional and refined */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-full: 50px;
+  
+  /* Typography - Serif for Headings, Sans for Body */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-serif: 'Noto Serif SC', 'STZhongsong', 'Georgia', 'Times New Roman', serif;
+  
+  /* Transitions */
+  --transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  --transition-fast: 0.15s cubic-bezier(0.25, 0.8, 0.25, 1);
+}

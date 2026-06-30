@@ -1,0 +1,80 @@
+[
+  {
+    "id": "dc_logic_gate",
+    "name": "逻辑门基础",
+    "module": "数字电路基础",
+    "description": "理解与、或、非、与非、或非、异或等基本逻辑门及真值表。",
+    "prerequisites": [],
+    "difficulty": 0.25,
+    "examWeight": 0.7,
+    "estimatedMinutes": 35,
+    "commonErrors": ["真值表填写遗漏", "异或与或门混淆"],
+    "errorTypes": ["truth_table_error", "concept_confusion"],
+    "teachingTips": "用开关电路类比输入输出逻辑关系。"
+  },
+  {
+    "id": "dc_boolean_algebra",
+    "name": "布尔代数与化简",
+    "module": "数字电路基础",
+    "description": "掌握布尔代数基本律、德摩根定律和逻辑表达式化简。",
+    "prerequisites": ["dc_logic_gate"],
+    "difficulty": 0.45,
+    "examWeight": 0.8,
+    "estimatedMinutes": 50,
+    "commonErrors": ["德摩根定律取反范围错误", "化简步骤缺少依据"],
+    "errorTypes": ["algebra_error", "proof_step_error"],
+    "teachingTips": "用逐步等价变换解释每一步化简依据。"
+  },
+  {
+    "id": "dc_kmap",
+    "name": "卡诺图化简",
+    "module": "数字电路基础",
+    "description": "掌握二变量、三变量、四变量卡诺图填图和圈组化简。",
+    "prerequisites": ["dc_boolean_algebra"],
+    "difficulty": 0.55,
+    "examWeight": 0.75,
+    "estimatedMinutes": 55,
+    "commonErrors": ["相邻格判断错误", "圈组没有取最大组合"],
+    "errorTypes": ["kmap_grouping_error", "simplification_error"],
+    "teachingTips": "强调首尾相邻和最大圈组原则。"
+  },
+  {
+    "id": "dc_comb_logic",
+    "name": "组合逻辑电路",
+    "module": "数字电路基础",
+    "description": "理解编码器、译码器、数据选择器、加法器等组合逻辑电路。",
+    "prerequisites": ["dc_kmap"],
+    "difficulty": 0.6,
+    "examWeight": 0.8,
+    "estimatedMinutes": 65,
+    "commonErrors": ["不能从需求推出真值表", "电路功能模块选择错误"],
+    "errorTypes": ["design_error", "truth_table_error"],
+    "teachingTips": "按需求分析、真值表、表达式、电路实现四步训练。"
+  },
+  {
+    "id": "dc_trigger",
+    "name": "触发器基础",
+    "module": "数字电路基础",
+    "description": "理解 RS、D、JK、T 触发器的状态保持和状态翻转特性。",
+    "prerequisites": ["dc_logic_gate"],
+    "difficulty": 0.65,
+    "examWeight": 0.75,
+    "estimatedMinutes": 60,
+    "commonErrors": ["混淆电平触发和边沿触发", "状态转移表填写错误"],
+    "errorTypes": ["state_transition_error", "timing_error"],
+    "teachingTips": "用时序波形说明触发沿和状态变化。"
+  },
+  {
+    "id": "dc_seq_logic",
+    "name": "时序逻辑电路",
+    "module": "数字电路基础",
+    "description": "理解计数器、寄存器、状态机等时序逻辑电路设计方法。",
+    "prerequisites": ["dc_trigger", "dc_comb_logic"],
+    "difficulty": 0.75,
+    "examWeight": 0.85,
+    "estimatedMinutes": 75,
+    "commonErrors": ["状态图与状态表不一致", "忘记考虑初始状态"],
+    "errorTypes": ["fsm_design_error", "initial_state_error"],
+    "teachingTips": "按状态定义、状态转移、输出逻辑和电路实现分步讲解。"
+  }
+]

@@ -1,0 +1,34 @@
+# ---- Java / Maven (backend) ----
+target/
+*.class
+*.jar
+!**/mvnw.jar
+!**/.mvn/wrapper/maven-wrapper.jar
+
+# ---- Node / Vite (frontend) ----
+node_modules/
+dist/
+*.log
+
+# ---- Env / secrets ----
+.env
+.env.local
+*.local
+
+# ---- IDE ----
+.idea/
+*.iml
+.vscode/
+
+# ---- OS ----
+Thumbs.db
+.DS_Store
+
+# ---- Project generated / scratch ----
+smartmentor/SmartMentor-back/outputs/
+smartmentor/smartmentor-web/output/
+smartmentor/SmartMentor-back/output/
+docx_render_qa/
+~$*.docx
+.playwright-cli/
+.claude/
