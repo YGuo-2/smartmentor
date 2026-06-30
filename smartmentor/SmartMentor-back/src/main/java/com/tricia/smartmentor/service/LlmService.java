@@ -154,14 +154,28 @@ public class LlmService {
         ChatModelClient primary = primaryClient();
         try {
             return call.apply(primary);
-        } catch (RuntimeException e) {
-            ChatModelClient secondary = secondaryClient(primary);
-            if (fallbackEnabled && secondary.isConfigured()) {
-                log.warn("主用大模型[{}]调用失败，回退到[{}]：{}",
-                        primary.providerName(), secondary.providerName(), e.getMessage());
-                return call.apply(secondary);
+        } catch (LlmApiException e) {
+            // 确定性错误（4xx，如密钥/参数错误）：回退到备用提供商也会同样失败，且白白多耗一轮重试，直接抛出
+            if (!e.isRetryable()) {
+                log.warn("主用大模型[{}]确定性错误(status={})，跳过回退：{}",
+                        primary.providerName(), e.getStatusCode(), e.getMessage());
+                throw e;
             }
-            throw e;
+            return fallbackOrThrow(primary, call, e);
+        } catch (RuntimeException e) {
+            return fallbackOrThrow(primary, call, e);
         }
+    }
+
+    private String fallbackOrThrow(ChatModelClient primary,
+                                   java.util.function.Function<ChatModelClient, String> call,
+                                   RuntimeException e) {
+        ChatModelClient secondary = secondaryClient(primary);
+        if (fallbackEnabled && secondary.isConfigured()) {
+            log.warn("主用大模型[{}]调用失败，回退到[{}]：{}",
+                    primary.providerName(), secondary.providerName(), e.getMessage());
+            return call.apply(secondary);
+        }
+        throw e;
     }
 }

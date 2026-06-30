@@ -188,11 +188,32 @@ public abstract class BaseAgent {
     // ------------------------------------------------------------------ 工具方法（供子类使用）
 
     /**
-     * 从 LLM 原始输出中提取第一个 JSON 对象块（{...}）。
-     * LLM 常在 JSON 前后附加 markdown 代码块或解释文字，本方法负责剥离。
+     * 向提示词追加一行学生画像信息（值非空时）。各内容生成 Agent 共用，避免重复实现。
+     *
+     * @param sb      目标 StringBuilder
+     * @param profile 学生画像 Map（可为 null）
+     * @param key     画像字段名
+     * @param label   展示标签
+     */
+    protected void appendProfileLine(StringBuilder sb, Map<String, Object> profile, String key, String label) {
+        if (profile == null) {
+            return;
+        }
+        Object v = profile.get(key);
+        if (v != null && !String.valueOf(v).isBlank() && !"null".equals(String.valueOf(v))) {
+            sb.append("- ").append(label).append("：").append(v).append("\n");
+        }
+    }
+
+    /**
+     * 从 LLM 原始输出中提取第一个完整、括号平衡的 JSON 值（对象 {...} 或数组 [...]）。
+     * <p>
+     * 相比简单的 {@code indexOf('{')}/{@code lastIndexOf('}')} 粗切，本实现通过括号配对扫描
+     * 找到第一个起始括号对应的真正闭合位置，并正确跳过字符串字面量内的括号与转义字符，
+     * 从而避免：LLM 回显示例 JSON 后再给真实答案时截到错误片段、或解释文字中的 {} 干扰。
      *
      * @param raw LLM 原始输出
-     * @return 提取出的 JSON 字符串，若未找到则返回原始内容
+     * @return 提取出的 JSON 字符串，若未找到平衡结构则返回清理后的原文
      */
     protected String extractJson(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -201,10 +222,48 @@ public abstract class BaseAgent {
         // 去除 markdown 代码块标记
         String cleaned = raw.replaceAll("(?s)```json\\s*", "").replaceAll("(?s)```\\s*", "").trim();
 
-        int start = cleaned.indexOf('{');
-        int end = cleaned.lastIndexOf('}');
-        if (start != -1 && end != -1 && end > start) {
-            return cleaned.substring(start, end + 1);
+        // 找到第一个 { 或 [ 作为起点
+        int start = -1;
+        char open = 0, close = 0;
+        for (int i = 0; i < cleaned.length(); i++) {
+            char c = cleaned.charAt(i);
+            if (c == '{') { start = i; open = '{'; close = '}'; break; }
+            if (c == '[') { start = i; open = '['; close = ']'; break; }
+        }
+        if (start == -1) {
+            return cleaned;
+        }
+
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = start; i < cleaned.length(); i++) {
+            char c = cleaned.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == open) {
+                depth++;
+            } else if (c == close) {
+                depth--;
+                if (depth == 0) {
+                    return cleaned.substring(start, i + 1);
+                }
+            }
+        }
+        // 未找到平衡的闭合括号（可能被截断），回退到原有粗切兜底
+        int lastClose = cleaned.lastIndexOf(close);
+        if (lastClose > start) {
+            return cleaned.substring(start, lastClose + 1);
         }
         return cleaned;
     }
@@ -309,6 +368,13 @@ public abstract class BaseAgent {
         return false;
     }
 
+    /**
+     * 计算写入 {@code agent_run_log.quality_score} 的分值。
+     * <p>
+     * 注意：除非 Agent 在 data 里显式给出 {@code qualityScore}，否则此处仅是<b>完整度启发值</b>
+     * （非空字段占比映射到 0.65~1.0），反映"产出字段填得多不多"，并不评估内容正确性/贴题性。
+     * 真正的质量校验由各 Agent 的 qualityCheck 承担。
+     */
     private Double resolveQualityScore(AgentResponse response, Exception error) {
         if (error != null || response == null) {
             return 0.0;

@@ -308,10 +308,29 @@ public class KnowledgeGraphService {
         // 找到最高频率
         int maxFrequency = frequencyMap.values().stream().mapToInt(Integer::intValue).max().orElse(0);
 
-        // 返回所有频率最高的节点
-        return frequencyMap.entrySet().stream()
+        // 频率最高的候选集
+        Set<String> topCandidates = frequencyMap.entrySet().stream()
                 .filter(entry -> entry.getValue() == maxFrequency)
-                .map(entry -> nodeMap.get(entry.getKey()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toSet());
+
+        // M10：在候选中只保留"最底层"根因——其自身前置不再属于候选集的节点。
+        // 否则单薄弱点时整条前置链频率都为 1 并列，会把中间节点也当根因；
+        // 过滤后只剩链条最底部的源节点，符合"自底向上回溯到最底层根因"的定义。
+        List<String> deepest = topCandidates.stream()
+                .filter(id -> {
+                    KnowledgeNode n = nodeMap.get(id);
+                    if (n == null || n.getPrerequisites() == null || n.getPrerequisites().isEmpty()) {
+                        return true; // 无前置 = 源节点
+                    }
+                    return n.getPrerequisites().stream().noneMatch(topCandidates::contains);
+                })
+                .collect(Collectors.toList());
+
+        List<String> finalRoots = deepest.isEmpty() ? new ArrayList<>(topCandidates) : deepest;
+
+        return finalRoots.stream()
+                .map(nodeMap::get)
                 .filter(Objects::nonNull)
                 .map(this::copyNode)
                 .collect(Collectors.toUnmodifiableList());

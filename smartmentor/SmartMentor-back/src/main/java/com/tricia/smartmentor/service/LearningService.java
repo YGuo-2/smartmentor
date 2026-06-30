@@ -26,6 +26,7 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -42,6 +43,7 @@ public class LearningService {
     private final TracingResultRepository tracingResultRepository;
     private final DiagnosticSessionRepository diagnosticSessionRepository;
     private final KnowledgeGraphService knowledgeGraphService;
+    private final AgentOrchestrator orchestrator;
     private final PlanningAgent planningAgent;
     private final TeachingAgent teachingAgent;
     private final EvaluationAgent evaluationAgent;
@@ -74,10 +76,23 @@ public class LearningService {
                 return t;
             });
 
+    /**
+     * 教学/资源 Agent 并行执行的专用有界线程池。
+     * 这些任务体是阻塞的同步 LLM 调用，不能跑在 ForkJoinPool.commonPool（并行度 cores-1、JVM 全局共享、
+     * 阻塞 IO 会钉死工作线程且不触发补偿线程），故隔离到专用池，按 LLM 并发上限设容量。
+     */
+    private final ExecutorService agentExecutor =
+            Executors.newFixedThreadPool(4, r -> {
+                Thread t = new Thread(r, "lesson-agent-worker");
+                t.setDaemon(true);
+                return t;
+            });
+
     public LearningService(LearningPathRepository learningPathRepository,
                            TracingResultRepository tracingResultRepository,
                            DiagnosticSessionRepository diagnosticSessionRepository,
                            KnowledgeGraphService knowledgeGraphService,
+                           AgentOrchestrator orchestrator,
                            PlanningAgent planningAgent,
                            TeachingAgent teachingAgent,
                            EvaluationAgent evaluationAgent,
@@ -94,6 +109,7 @@ public class LearningService {
         this.tracingResultRepository = tracingResultRepository;
         this.diagnosticSessionRepository = diagnosticSessionRepository;
         this.knowledgeGraphService = knowledgeGraphService;
+        this.orchestrator = orchestrator;
         this.planningAgent = planningAgent;
         this.teachingAgent = teachingAgent;
         this.evaluationAgent = evaluationAgent;
@@ -201,7 +217,12 @@ public class LearningService {
         // 构建学习节点
         List<Map<String, Object>> nodes;
         if (graphBackedPath) {
-            AgentResponse planResponse = planningAgent.execute(context);
+            // 通过编排器触发 TRACING_COMPLETE 事件链：PlanningAgent 作为该事件的注册处理器被调用。
+            // PATH_GENERATED 无下游处理器，不会级联，故用普通 fireEvent 即可。
+            List<AgentResponse> planResponses = orchestrator.fireEvent(AgentEvent.TRACING_COMPLETE, context);
+            AgentResponse planResponse = planResponses.isEmpty()
+                    ? AgentResponse.failure("路径规划未产出结果")
+                    : planResponses.get(0);
             if (planResponse.isSuccess()) {
                 nodes = buildNodesFromPlanningResult(planResponse.getData(), sortedNodes, dailyStudyMinutes);
                 if (nodes.size() < sortedNodes.size() || !pathCoversTarget(nodes, targetKnowledgePointId)) {
@@ -551,15 +572,17 @@ public class LearningService {
 
         // 多智能体协作生成：教学Agent 产出练习块，资源Agent 产出多模态资源，二者并行。
         // 讲解块另由流式接口（streamLessonExplanation）产出，三路分工互不阻塞。
+        // 注：此处刻意保持 agent 直调而非走 orchestrator——两个 agent 并行执行，
+        // 而 fireEvent 是同步串行级联、无并行语义；事件编排仅用于诊断→溯源→规划这条串行链路。
         AgentContext exerciseContext = buildTeachingContext(studentId, moduleName, kpId, kpName,
                 kpDesc, currentMastery, errorTypes, TeachingAgent.SCOPE_EXERCISE);
         AgentContext resourceContext = buildTeachingContext(studentId, moduleName, kpId, kpName,
                 kpDesc, currentMastery, errorTypes, "resource");
 
         CompletableFuture<AgentResponse> exerciseFuture =
-                CompletableFuture.supplyAsync(() -> teachingAgent.execute(exerciseContext));
+                CompletableFuture.supplyAsync(() -> teachingAgent.execute(exerciseContext), agentExecutor);
         CompletableFuture<AgentResponse> resourceFuture =
-                CompletableFuture.supplyAsync(() -> resourceAgent.execute(resourceContext));
+                CompletableFuture.supplyAsync(() -> resourceAgent.execute(resourceContext), agentExecutor);
 
         AgentResponse teachResponse = buildExerciseResponse(
                 awaitAgent(exerciseFuture, kpName, "练习"), kpName);
@@ -1348,6 +1371,8 @@ public class LearningService {
         try {
             return future.get(LESSON_AGENT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
+            // future.cancel(true) 无法中断 OkHttp 同步 execute（不响应线程中断），调用方仅借此快速返回降级结果；
+            // 底层请求由 OkHttp callTimeout(190s) 兜底回收，不会永久占用 agentExecutor 线程。
             future.cancel(true);
             log.warn("TeachingAgent[{}] 生成 {} 超过 {} 秒", label, kpName, LESSON_AGENT_TIMEOUT_SECONDS);
             return AgentResponse.failure(label + "生成超时");
@@ -2807,7 +2832,19 @@ public class LearningService {
             }
         } else {
             markNodeFailed(nodes, nodeId, finalMastery);
-            remediationPlan = buildRemediationPlan(nodeId, kpId, kpName, questionResults);
+            // 未通过 → 触发 MASTERY_NOT_REACHED 事件链：TeachingAgent 作为处理器降难度重新生成补救内容。
+            // LESSON_GENERATED 无下游处理器，不会级联；agent 失败时 remedial 为 null，buildRemediationPlan 回落静态逻辑。
+            context.putSessionData("contentScope", TeachingAgent.SCOPE_FULL);
+            context.putSessionData("masteryLevel", finalMastery);
+            AgentResponse remedial = null;
+            try {
+                List<AgentResponse> remResponses = orchestrator.fireEvent(AgentEvent.MASTERY_NOT_REACHED, context);
+                remedial = remResponses.isEmpty() ? null : remResponses.get(0);
+            } catch (Exception e) {
+                log.warn("MASTERY_NOT_REACHED 补救教学触发失败，回落静态补救方案: {}", e.getMessage());
+            }
+            remediationPlan = buildRemediationPlan(nodeId, kpId, kpName, questionResults,
+                    remedial != null && remedial.isSuccess() ? remedial.getData() : null);
             remediationNodeId = upsertRemediationNode(nodes, nodeId, remediationPlan);
             try {
                 path.setNodes(objectMapper.writeValueAsString(nodes));
@@ -3489,7 +3526,8 @@ public class LearningService {
     private Map<String, Object> buildRemediationPlan(String nodeId,
                                                      String kpId,
                                                      String kpName,
-                                                     List<Map<String, Object>> questionResults) {
+                                                     List<Map<String, Object>> questionResults,
+                                                     Map<String, Object> remedialAgentData) {
         List<Map<String, Object>> incorrect = questionResults.stream()
                 .filter(r -> !Boolean.TRUE.equals(r.get("isCorrect")))
                 .collect(Collectors.toList());
@@ -3516,6 +3554,10 @@ public class LearningService {
         plan.put("focusErrors", focusErrors);
         plan.put("actions", actions);
         plan.put("estimatedMinutes", focusErrors.isEmpty() ? 15 : 20);
+        // 补救教学 Agent 成功降难度重生成时，附带其产出供前端直接展示补救课程内容
+        if (remedialAgentData != null && !remedialAgentData.isEmpty()) {
+            plan.put("remedialContent", remedialAgentData);
+        }
         return plan;
     }
 

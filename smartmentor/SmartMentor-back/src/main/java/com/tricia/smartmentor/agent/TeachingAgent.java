@@ -128,16 +128,16 @@ public class TeachingAgent extends BaseAgent {
         sb.append("- 当前掌握度：").append(String.format("%.2f", masteryLevel)).append("\n");
         sb.append("- 教学策略：").append(strategyDesc).append("\n");
         if (profile != null && !profile.isEmpty()) {
-            appendProfile(sb, profile, "majorDirection", "专业方向");
-            appendProfile(sb, profile, "currentCourse", "当前课程");
-            appendProfile(sb, profile, "educationLevel", "学历层次");
-            appendProfile(sb, profile, "learningGoal", "学习目标");
-            appendProfile(sb, profile, "foundationLevel", "基础水平");
-            appendProfile(sb, profile, "weakModulePriority", "薄弱模块");
-            appendProfile(sb, profile, "academicInterest", "兴趣方向");
-            appendProfile(sb, profile, "learningStyle", "学习风格");
+            appendProfileLine(sb, profile, "majorDirection", "专业方向");
+            appendProfileLine(sb, profile, "currentCourse", "当前课程");
+            appendProfileLine(sb, profile, "educationLevel", "学历层次");
+            appendProfileLine(sb, profile, "learningGoal", "学习目标");
+            appendProfileLine(sb, profile, "foundationLevel", "基础水平");
+            appendProfileLine(sb, profile, "weakModulePriority", "薄弱模块");
+            appendProfileLine(sb, profile, "academicInterest", "兴趣方向");
+            appendProfileLine(sb, profile, "learningStyle", "学习风格");
             // 兼容旧字段命名
-            appendProfile(sb, profile, "grade", "学历层次");
+            appendProfileLine(sb, profile, "grade", "学历层次");
         }
         Object learningTarget = sessionData.get("learningTarget");
         if (learningTarget != null && !String.valueOf(learningTarget).isBlank()) {
@@ -178,14 +178,6 @@ public class TeachingAgent extends BaseAgent {
         }
 
         return sb.toString();
-    }
-
-    /** 学生情况：某字段非空时追加一行（值为字符串）。 */
-    private void appendProfile(StringBuilder sb, Map<String, Object> profile, String key, String label) {
-        Object v = profile.get(key);
-        if (v != null && !String.valueOf(v).isBlank() && !"null".equals(String.valueOf(v))) {
-            sb.append("- ").append(label).append("：").append(v).append("\n");
-        }
     }
 
     /**

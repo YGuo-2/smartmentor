@@ -28,6 +28,7 @@ public class TracingService {
     private final DiagnosticSessionRepository diagnosticSessionRepository;
     private final AnswerRecordRepository answerRecordRepository;
     private final TracingAgent tracingAgent;
+    private final AgentOrchestrator orchestrator;
     private final KnowledgeGraphService knowledgeGraphService;
     private final ObjectMapper objectMapper;
     private final ExecutorService asyncExecutor = Executors.newFixedThreadPool(2);
@@ -36,12 +37,14 @@ public class TracingService {
                           DiagnosticSessionRepository diagnosticSessionRepository,
                           AnswerRecordRepository answerRecordRepository,
                           TracingAgent tracingAgent,
+                          AgentOrchestrator orchestrator,
                           KnowledgeGraphService knowledgeGraphService,
                           ObjectMapper objectMapper) {
         this.tracingResultRepository = tracingResultRepository;
         this.diagnosticSessionRepository = diagnosticSessionRepository;
         this.answerRecordRepository = answerRecordRepository;
         this.tracingAgent = tracingAgent;
+        this.orchestrator = orchestrator;
         this.knowledgeGraphService = knowledgeGraphService;
         this.objectMapper = objectMapper;
     }
@@ -74,16 +77,32 @@ public class TracingService {
             module = session.getModule();
 
             List<AnswerRecord> records = answerRecordRepository.findByDiagnosticIdOrderByQuestionIndexAsc(diagnosticId);
+            // 先按知识点统计真实作答情况（答对数/总数），用于计算真实掌握度，而非写死常数
+            Map<String, int[]> kpStats = new LinkedHashMap<>(); // kpId -> [correct, total]
+            for (AnswerRecord r : records) {
+                String kpId = r.getKnowledgePointId();
+                if (kpId == null) {
+                    continue;
+                }
+                int[] stat = kpStats.computeIfAbsent(kpId, k -> new int[2]);
+                if (Boolean.TRUE.equals(r.getIsCorrect())) {
+                    stat[0]++;
+                }
+                stat[1]++;
+            }
             Set<String> seen = new LinkedHashSet<>();
             for (AnswerRecord r : records) {
                 String kpId = r.getKnowledgePointId();
                 if (Boolean.FALSE.equals(r.getIsCorrect()) && kpId != null && seen.add(kpId)) {
+                    int[] stat = kpStats.get(kpId);
+                    double realMastery = (stat != null && stat[1] > 0)
+                            ? round2((double) stat[0] / stat[1]) : 0.3;
                     Map<String, Object> wp = new LinkedHashMap<>();
                     wp.put("kpId", kpId);
                     wp.put("kpName", resolveKpName(kpId, r.getKnowledgePointName()));
-                    wp.put("masteryLevel", 0.3);
+                    wp.put("masteryLevel", realMastery);
                     weakPoints.add(wp);
-                    masteryMap.put(kpId, 0.3);
+                    masteryMap.put(kpId, realMastery);
                 }
                 // 统计错误模式
                 if (Boolean.FALSE.equals(r.getIsCorrect()) && r.getErrorType() != null && !r.getErrorType().isEmpty()) {
@@ -120,8 +139,8 @@ public class TracingService {
                 .collect(Collectors.toList());
 
         Set<String> allRootCauseIds = fallbackRootCauses(weakKpIds);
-        List<Map<String, Object>> tracingResults = buildTracingResultsFromGraph(weakPoints, allRootCauseIds, depth, threshold);
-        List<Map<String, Object>> mergedRootCauses = buildMergedRootCauses(allRootCauseIds, null);
+        List<Map<String, Object>> tracingResults = buildTracingResultsFromGraph(weakPoints, allRootCauseIds, masteryMap, depth, threshold);
+        List<Map<String, Object>> mergedRootCauses = buildMergedRootCauses(allRootCauseIds, masteryMap, null);
         Map<String, Object> graphVisualization = buildGraphVisualization(weakKpIds, allRootCauseIds, depth);
         List<Map<String, Object>> suggestedLearningPath = buildLearningPath(allRootCauseIds, weakKpIds);
         String suggestion = buildFallbackSuggestion(weakPoints, mergedRootCauses);
@@ -243,8 +262,13 @@ public class TracingService {
             agentContext.getErrorPatterns().putAll(errorPatterns);
             agentContext.putSessionData("knowledgeGraph", knowledgeGraphContext);
 
-            // 调用 AI Agent
-            AgentResponse response = tracingAgent.execute(agentContext);
+            // 通过编排器触发 DIAGNOSIS_COMPLETE 事件链：TracingAgent 作为该事件的注册处理器被调用。
+            // 用 NoCascade——溯源完成后 TracingAgent 会产出 TRACING_COMPLETE，但路径规划属独立 HTTP 端点，
+            // 不应在本溯源请求内被连带触发，故截断级联。
+            List<AgentResponse> responses = orchestrator.fireEventNoCascade(AgentEvent.DIAGNOSIS_COMPLETE, agentContext);
+            AgentResponse response = responses.isEmpty()
+                    ? AgentResponse.failure("溯源未产出结果")
+                    : responses.get(0);
 
             if (response.isSuccess() && response.getData() != null) {
                 Map<String, Object> aiData = response.getData();
@@ -257,15 +281,21 @@ public class TracingService {
                     for (Map<String, Object> arc : aiRootCauses) {
                         Object nodeId = arc.get("nodeId");
                         String normalizedNodeId = normalizeKnowledgePointId(nodeId);
-                        if (normalizedNodeId != null) {
+                        if (normalizedNodeId == null) {
+                            continue;
+                        }
+                        // M7：仅接受真实存在于知识图谱中的节点，丢弃 LLM 幻觉出的图谱外根因
+                        if (knowledgeGraphService.getNode(normalizedNodeId) != null) {
                             allRootCauseIds.add(normalizedNodeId);
+                        } else {
+                            log.warn("溯源: AI 返回图谱外根因 nodeId={}，已丢弃 (tracingId={})", normalizedNodeId, tracingId);
                         }
                     }
                 }
 
                 // 重新构建增强结果
-                List<Map<String, Object>> tracingResults = buildTracingResultsFromGraph(weakPoints, allRootCauseIds, depth, threshold);
-                List<Map<String, Object>> mergedRootCauses = buildMergedRootCauses(allRootCauseIds, aiData);
+                List<Map<String, Object>> tracingResults = buildTracingResultsFromGraph(weakPoints, allRootCauseIds, masteryMap, depth, threshold);
+                List<Map<String, Object>> mergedRootCauses = buildMergedRootCauses(allRootCauseIds, masteryMap, aiData);
                 Map<String, Object> graphVisualization = buildGraphVisualization(weakKpIds, allRootCauseIds, depth);
                 List<Map<String, Object>> suggestedLearningPath = buildLearningPath(allRootCauseIds, weakKpIds);
                 String suggestion = buildSuggestionFromAI(aiNarrative, weakPoints, mergedRootCauses);
@@ -341,6 +371,7 @@ public class TracingService {
     private List<Map<String, Object>> buildTracingResultsFromGraph(
             List<Map<String, Object>> weakPoints,
             Set<String> rootCauseIds,
+            Map<String, Double> masteryMap,
             int maxDepth, double threshold) {
 
         List<Map<String, Object>> tracingResults = new ArrayList<>();
@@ -364,7 +395,7 @@ public class TracingService {
             // 目标节点
             KnowledgeNode targetNode = knowledgeGraphService.getNode(kpId);
             String targetModule = targetNode != null ? targetNode.getModule() : "";
-            Map<String, Object> targetNodeMap = buildNodeMap(kpId, kpName, mastery, 0, targetModule, true, false);
+            Map<String, Object> targetNodeMap = buildNodeMap(kpId, kpName, mastery, 0, targetModule, true, false, false);
             tracingPath.add(targetNodeMap);
             pathNodes.add(targetNodeMap);
 
@@ -395,10 +426,13 @@ public class TracingService {
                 KnowledgeNode toNode = knowledgeGraphService.getNode(toId);
                 if (toNode == null) continue;
 
-                double prereqMastery = 0.25 + (currentDepth * 0.05);
+                // M9：优先用真实掌握度；无作答数据的前置点标记为"估计"（不伪造精确小数）
+                Double realPrereqMastery = masteryMap != null ? masteryMap.get(toId) : null;
+                double prereqMastery = realPrereqMastery != null ? realPrereqMastery : 0.3;
+                boolean prereqEstimated = realPrereqMastery == null;
                 Map<String, Object> prereqNodeMap = buildNodeMap(
                         toId, toNode.getName(), prereqMastery, currentDepth,
-                        toNode.getModule(), false, rootCauseIds.contains(toId));
+                        toNode.getModule(), false, rootCauseIds.contains(toId), prereqEstimated);
                 tracingPath.add(prereqNodeMap);
                 pathNodes.add(prereqNodeMap);
 
@@ -412,14 +446,19 @@ public class TracingService {
                 edge.put("type", crossModule ? "cross_module" : "strong");
                 pathEdges.add(edge);
 
-                if (rootCauseIds.contains(toId) && rootCauseObj == null) {
+                // M10：在所有命中的根因里选 depth 最深者（最底层根因），而非 BFS 首个命中（最浅前置）
+                if (rootCauseIds.contains(toId)
+                        && (rootCauseObj == null
+                            || currentDepth > ((Number) rootCauseObj.get("depth")).intValue())) {
                     rootCauseObj = new LinkedHashMap<>();
                     rootCauseObj.put("knowledgePointId", toId);
                     rootCauseObj.put("knowledgePointName", toNode.getName());
                     rootCauseObj.put("module", toNode.getModule());
-                    rootCauseObj.put("mastery", prereqMastery);
+                    rootCauseObj.put("mastery", round2(prereqMastery));
+                    rootCauseObj.put("masteryEstimated", prereqEstimated);
                     rootCauseObj.put("depth", currentDepth);
-                    rootCauseObj.put("reason", "AI分析识别该知识点为当前溯源链的根本薄弱点，其掌握不足导致后续依赖知识点连锁薄弱。");
+                    // M6：如实描述该 reason 来自确定性图谱回溯；AI 贡献的 reason 单独存于 mergedRootCauses
+                    rootCauseObj.put("reason", "基于知识图谱前置依赖回溯，该知识点为多个薄弱点的共同前置根节点，其掌握不足会连锁影响后续依赖知识点。");
                 }
 
                 // 继续展开下一层
@@ -444,15 +483,18 @@ public class TracingService {
 
     private Map<String, Object> buildNodeMap(String id, String name, double mastery,
                                               int depth, String module,
-                                              boolean isTarget, boolean isRootCause) {
+                                              boolean isTarget, boolean isRootCause,
+                                              boolean masteryEstimated) {
         Map<String, Object> node = new LinkedHashMap<>();
         node.put("knowledgePointId", id);
         node.put("knowledgePointName", name);
-        node.put("mastery", Math.round(mastery * 100.0) / 100.0);
+        node.put("mastery", round2(mastery));
+        node.put("masteryEstimated", masteryEstimated);
         node.put("depth", depth);
         node.put("module", module != null ? module : "");
         String statusStr;
-        if (mastery >= 0.9) statusStr = "熟练";
+        if (masteryEstimated) statusStr = "未测";
+        else if (mastery >= 0.9) statusStr = "熟练";
         else if (mastery >= 0.7) statusStr = "基本掌握";
         else if (mastery >= 0.5) statusStr = "一般";
         else statusStr = "薄弱";
@@ -462,10 +504,15 @@ public class TracingService {
         return node;
     }
 
+    /** 掌握度统一保留两位小数。 */
+    private double round2(double v) {
+        return Math.round(v * 100.0) / 100.0;
+    }
+
     // ================================================================== 合并根因 & 学习路径
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> buildMergedRootCauses(Set<String> rootCauseIds, Map<String, Object> aiData) {
+    private List<Map<String, Object>> buildMergedRootCauses(Set<String> rootCauseIds, Map<String, Double> masteryMap, Map<String, Object> aiData) {
         List<Map<String, Object>> causes = new ArrayList<>();
         int priority = 1;
 
@@ -485,7 +532,10 @@ public class TracingService {
             KnowledgeNode node = knowledgeGraphService.getNode(rcId);
             cause.put("knowledgePointName", node != null ? node.getName() : rcId);
             cause.put("module", node != null ? node.getModule() : "");
-            cause.put("mastery", 0.25);
+            // M9：根因若有真实作答掌握度则用之，否则标记为未测（不伪造 0.25）
+            Double realMastery = masteryMap != null ? masteryMap.get(rcId) : null;
+            cause.put("mastery", realMastery != null ? round2(realMastery) : null);
+            cause.put("masteryEstimated", realMastery == null);
 
             // 从 AI 获取 confidence 和 reason
             if (aiRootCauses != null) {
