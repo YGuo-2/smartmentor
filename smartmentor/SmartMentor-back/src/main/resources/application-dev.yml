@@ -39,6 +39,15 @@ smartmentor:
   llm:
     provider: ${SMARTMENTOR_LLM_PROVIDER:deepseek}
     fallback-enabled: ${SMARTMENTOR_LLM_FALLBACK_ENABLED:true}
+  # 长期记忆（情景记忆）。enabled 总开关；embedding-enabled 控制是否调向量化
+  # （关键词召回版无 EmbeddingClient 实现，此项即使为 true 也自动降级关键词）；
+  # recall-timeout-ms 召回硬超时，超时即跳过不阻塞 SSE 首包。详见 docs/MEMORY_DESIGN.md。
+  memory:
+    enabled: ${SMARTMENTOR_MEMORY_ENABLED:true}
+    embedding-enabled: ${SMARTMENTOR_MEMORY_EMBEDDING_ENABLED:true}
+    recall-timeout-ms: ${SMARTMENTOR_MEMORY_RECALL_TIMEOUT_MS:300}
+    recall-top-k: ${SMARTMENTOR_MEMORY_RECALL_TOP_K:4}
+    similarity-threshold: ${SMARTMENTOR_MEMORY_SIMILARITY_THRESHOLD:0.0}
   demo:
     offline-agent-enabled: ${SMARTMENTOR_OFFLINE_DEMO_ENABLED:false}
   bilibili:
