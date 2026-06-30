@@ -858,6 +858,27 @@ CREATE TABLE IF NOT EXISTS agent_run_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Agent运行日志表';
 
 
+-- 学生长期记忆（情景记忆）：跨会话沉淀的一句话事实/偏好/薄弱点，下次对话按相关性召回。
+-- embedding 关键词召回阶段为空，接入向量化后填充；embedding_model/dim 用于隔离不可比向量。
+-- 详见 smartmentor/SmartMentor-back/docs/MEMORY_DESIGN.md。
+CREATE TABLE IF NOT EXISTS student_memory (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  student_id BIGINT NOT NULL COMMENT '学生ID',
+  type VARCHAR(20) NOT NULL COMMENT 'fact/preference/weakness/goal',
+  content VARCHAR(500) NOT NULL COMMENT '一句话记忆',
+  content_hash CHAR(64) NOT NULL COMMENT 'content的SHA-256，去重用',
+  embedding JSON DEFAULT NULL COMMENT '向量本体(float[])，null表示走关键词召回',
+  embedding_provider VARCHAR(30) DEFAULT NULL COMMENT '向量来源，如spark-maas',
+  embedding_model VARCHAR(50) DEFAULT NULL COMMENT '向量模型名，隔离不可比向量',
+  embedding_dim INT DEFAULT NULL COMMENT '向量维度',
+  source_session VARCHAR(100) DEFAULT NULL COMMENT '来源会话',
+  salience DECIMAL(3,2) DEFAULT 0.50 COMMENT '显著度，留给二期衰减/巩固',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_student_content (student_id, content_hash),
+  INDEX idx_student_memory_student (student_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='学生长期记忆条目（情景记忆）';
+
+
 -- ############################################################
 -- 第 2 部分 / A3 画像字段迁移（幂等，可重复执行）
 -- 源文件：SmartMentor_A3_profile_migration.sql

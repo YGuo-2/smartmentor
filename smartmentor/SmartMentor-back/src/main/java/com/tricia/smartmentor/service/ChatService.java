@@ -37,6 +37,7 @@ public class ChatService {
     private final ConversationalProfileService conversationalProfileService;
     private final MasteryUpdateService masteryUpdateService;
     private final ProfileService profileService;
+    private final MemoryService memoryService;
     private final RedisUtil redisUtil;
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService heartbeatScheduler =
@@ -67,6 +68,7 @@ public class ChatService {
                        ConversationalProfileService conversationalProfileService,
                        MasteryUpdateService masteryUpdateService,
                        ProfileService profileService,
+                       MemoryService memoryService,
                        RedisUtil redisUtil,
                        ObjectMapper objectMapper) {
         this.chatSessionRepository = chatSessionRepository;
@@ -83,6 +85,7 @@ public class ChatService {
         this.conversationalProfileService = conversationalProfileService;
         this.masteryUpdateService = masteryUpdateService;
         this.profileService = profileService;
+        this.memoryService = memoryService;
         this.redisUtil = redisUtil;
         this.objectMapper = objectMapper;
     }
@@ -288,6 +291,15 @@ public class ChatService {
                 ? buildInterviewSystemPrompt(studentId)
                 : buildSystemPrompt(studentId, pathId, nodeId);
         messages.add(Map.of("role", "system", "content", systemPrompt));
+
+        // 1.5 长期记忆召回：按当前消息语义/关键词召回历史会话沉淀的记忆，注入为一条 system 消息。
+        // 访谈模式跳过（画像采集不应被旧记忆干扰）；recall 内部有超时+降级，不阻塞首包。
+        if (!interviewMode) {
+            String memoryContext = memoryService.recall(studentId, currentMessage);
+            if (memoryContext != null && !memoryContext.isBlank()) {
+                messages.add(Map.of("role", "system", "content", memoryContext));
+            }
+        }
 
         // 2. 历史对话（排除刚刚保存的当前学生消息）
         List<ChatMessage> history = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
@@ -555,6 +567,8 @@ public class ChatService {
                     if (convo != null && !convo.isBlank()) {
                         conversationalProfileService.extractAndApply(studentId, convo, false);
                         detectAndApplyWeakSignals(studentId, convo);
+                        // 长期记忆巩固：把最近对话压成可跨会话召回的记忆条目
+                        memoryService.consolidate(studentId, sessionId, convo);
                     }
                 } catch (Exception e) {
                     log.debug("对话画像静默更新失败（忽略）: {}", e.getMessage());
