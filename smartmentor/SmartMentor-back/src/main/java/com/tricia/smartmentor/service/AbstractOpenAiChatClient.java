@@ -25,7 +25,8 @@ import java.util.function.Consumer;
 @Slf4j
 public abstract class AbstractOpenAiChatClient implements ChatModelClient {
 
-    private static final int MAX_TOKENS = 4096;
+    // 长输出场景（8 题诊断含选项、逐题详细分析、多节点学习路径）4096 易截断，上调留足空间。
+    private static final int MAX_TOKENS = 8192;
     private static final int SYNC_MAX_RETRIES = 2;
 
     private final String providerName;
@@ -53,6 +54,9 @@ public abstract class AbstractOpenAiChatClient implements ChatModelClient {
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(180, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)
+                // 整次调用的硬超时（含连接/写/读/重定向）。同步 execute() 不响应线程中断，
+                // 上层 future.cancel(true) 无法中断阻塞的 socket 读，故在此设硬上限兜底，避免线程被钉死。
+                .callTimeout(190, TimeUnit.SECONDS)
                 .build();
     }
 
@@ -202,6 +206,13 @@ public abstract class AbstractOpenAiChatClient implements ChatModelClient {
                     Thread.sleep(1000L * attempt);
                 }
                 return doSyncCall(userMessage, systemPrompt, temperature, jsonMode);
+            } catch (LlmApiException e) {
+                lastException = e;
+                log.warn("[{}] API 调用失败 (attempt {}, status={}): {}", providerName, attempt + 1, e.getStatusCode(), e.getMessage());
+                if (!e.isRetryable()) {
+                    // 确定性错误（4xx，如密钥/参数错误）：重试无意义，立即抛出供上层跳过回退
+                    throw e;
+                }
             } catch (Exception e) {
                 lastException = e;
                 log.warn("[{}] API 调用失败 (attempt {}): {}", providerName, attempt + 1, e.getMessage());
@@ -249,7 +260,9 @@ public abstract class AbstractOpenAiChatClient implements ChatModelClient {
             ResponseBody body = response.body();
             if (!response.isSuccessful()) {
                 String errorBody = body != null ? body.string() : "unknown";
-                throw new IOException(providerName + " API error " + response.code() + ": " + errorBody);
+                throw new LlmApiException(response.code(),
+                        LlmApiException.isRetryableStatus(response.code()),
+                        providerName + " API error " + response.code() + ": " + errorBody);
             }
             if (body == null) {
                 throw new IOException("Response body is null");
@@ -259,7 +272,14 @@ public abstract class AbstractOpenAiChatClient implements ChatModelClient {
             JsonNode responseJson = objectMapper.readTree(responseStr);
             JsonNode choices = responseJson.get("choices");
             if (choices != null && choices.size() > 0) {
-                JsonNode message = choices.get(0).get("message");
+                JsonNode firstChoice = choices.get(0);
+                // M4：输出因长度上限被截断时按可重试错误处理，避免截断的半截 JSON 被静默当成成功结果
+                JsonNode finishReason = firstChoice.get("finish_reason");
+                if (finishReason != null && "length".equals(finishReason.asText())) {
+                    throw new LlmApiException(0, true,
+                            providerName + " 输出因 max_tokens 截断 (finish_reason=length)，结果不完整");
+                }
+                JsonNode message = firstChoice.get("message");
                 if (message != null && message.has("content")) {
                     return message.get("content").asText("");
                 }
@@ -278,6 +298,12 @@ public abstract class AbstractOpenAiChatClient implements ChatModelClient {
                     Thread.sleep(1000L * attempt);
                 }
                 return doMultiTurnCall(messages, temperature);
+            } catch (LlmApiException e) {
+                lastException = e;
+                log.warn("[{}] 多轮 API 调用失败 (attempt {}, status={}): {}", providerName, attempt + 1, e.getStatusCode(), e.getMessage());
+                if (!e.isRetryable()) {
+                    throw e;
+                }
             } catch (Exception e) {
                 lastException = e;
                 log.warn("[{}] 多轮 API 调用失败 (attempt {}): {}", providerName, attempt + 1, e.getMessage());
@@ -313,14 +339,22 @@ public abstract class AbstractOpenAiChatClient implements ChatModelClient {
             ResponseBody body = response.body();
             if (!response.isSuccessful()) {
                 String errorBody = body != null ? body.string() : "unknown";
-                throw new IOException(providerName + " API error " + response.code() + ": " + errorBody);
+                throw new LlmApiException(response.code(),
+                        LlmApiException.isRetryableStatus(response.code()),
+                        providerName + " API error " + response.code() + ": " + errorBody);
             }
             if (body == null) throw new IOException("null body");
 
             JsonNode responseJson = objectMapper.readTree(body.string());
             JsonNode choices = responseJson.get("choices");
             if (choices != null && choices.size() > 0) {
-                return choices.get(0).get("message").get("content").asText("");
+                JsonNode firstChoice = choices.get(0);
+                JsonNode finishReason = firstChoice.get("finish_reason");
+                if (finishReason != null && "length".equals(finishReason.asText())) {
+                    throw new LlmApiException(0, true,
+                            providerName + " 多轮输出因 max_tokens 截断，结果不完整");
+                }
+                return firstChoice.get("message").get("content").asText("");
             }
             throw new IOException("No choices in response");
         }

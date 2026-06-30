@@ -35,6 +35,12 @@ public class PlanningAgent extends BaseAgent {
     }
 
     @Override
+    protected String callLLM(String prompt, AgentContext context) {
+        // 规划要求严格的 learningPath/milestones JSON，与诊断/溯源 Agent 对齐启用 json 模式
+        return llmService.chatJsonSync(prompt, getSystemPrompt(), getTemperature());
+    }
+
+    @Override
     protected String getSystemPrompt() {
         String fallback = "你是课程规划专家，需要设计最优学习路径，遵循「先补基础再进阶」原则。"
                 + "你擅长根据知识点间的依赖关系和学生当前掌握情况，规划出高效、循序渐进的学习计划。"

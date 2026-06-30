@@ -35,8 +35,5 @@ public enum AgentEvent {
     NEW_WEAKNESS_FOUND,
 
     /** 溯源发现跨模块的根本原因 */
-    CROSS_MODULE_ROOT_FOUND,
-
-    /** 前置知识点已被学生掌握，可推进主线学习 */
-    PREREQUISITE_MASTERED
+    CROSS_MODULE_ROOT_FOUND
 }

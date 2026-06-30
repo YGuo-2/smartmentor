@@ -165,14 +165,6 @@ public class ResourceAgent extends BaseAgent {
         return sb.toString();
     }
 
-    private void appendProfileLine(StringBuilder sb, Map<String, Object> profile, String key, String label) {
-        if (profile == null) return;
-        Object v = profile.get(key);
-        if (v != null && !String.valueOf(v).isBlank() && !"null".equals(String.valueOf(v))) {
-            sb.append("- ").append(label).append("：").append(v).append("\n");
-        }
-    }
-
     @Override
     protected Map<String, Object> parseResponse(String llmResponse, AgentContext context) {
         return safeParseJson(llmResponse);

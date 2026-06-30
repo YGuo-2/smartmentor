@@ -118,6 +118,38 @@ public class AgentOrchestrator {
         return responses;
     }
 
+    /**
+     * 触发指定事件并执行其所有注册处理器，但<b>不</b>进行级联传播。
+     * <p>
+     * 与 {@link #fireEvent} 的唯一区别：即使处理器返回携带后续事件的 AgentResponse，
+     * 也不会自动触发下游事件。用于"端点内接通"场景——调用方只想驱动当前这一步事件链
+     * （让注册的 handler 真正执行），但后续步骤分属其它独立 HTTP 端点，不应在本请求内被连带触发。
+     *
+     * @param event   要触发的事件
+     * @param context 当前协作上下文（events 列表会追加本次事件）
+     * @return 本次事件所有处理器产生的 AgentResponse 列表（不含级联结果）
+     */
+    public List<AgentResponse> fireEventNoCascade(AgentEvent event, AgentContext context) {
+        log.info("触发事件(无级联): {}, studentId={}", event, context.getStudentId());
+        context.getEvents().add(event);
+
+        List<Function<AgentContext, AgentResponse>> handlers = eventHandlers.get(event);
+        if (handlers == null || handlers.isEmpty()) {
+            log.debug("事件 {} 无注册处理器，跳过", event);
+            return Collections.emptyList();
+        }
+
+        List<AgentResponse> responses = new ArrayList<>();
+        for (Function<AgentContext, AgentResponse> handler : handlers) {
+            AgentResponse response = handler.apply(context);
+            responses.add(response);
+            if (response.getData() != null && !response.getData().isEmpty()) {
+                context.getSessionData().putAll(response.getData());
+            }
+        }
+        return responses;
+    }
+
     // ------------------------------------------------------------------ Pipeline 模式
 
     /**

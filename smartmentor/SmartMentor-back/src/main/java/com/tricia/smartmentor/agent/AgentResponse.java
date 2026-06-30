@@ -12,8 +12,7 @@ import java.util.Map;
  * Agent 执行结果的统一包装器。
  * <p>
  * 每个 Agent 的 {@code execute()} 方法返回一个 AgentResponse，
- * AgentOrchestrator 根据其中的 {@code event} 字段决定是否触发级联处理，
- * 根据 {@code nextAgent} 字段给出后续调用建议。
+ * AgentOrchestrator 根据其中的 {@code event} 字段决定是否触发级联处理。
  */
 @Data
 @Builder
@@ -42,12 +41,6 @@ public class AgentResponse {
      */
     private String message;
 
-    /**
-     * 建议调用的下一个 Agent 名称（可选）。
-     * 为 null 或空字符串表示 Pipeline 已可结束或由编排器自行决定。
-     */
-    private String nextAgent;
-
     // ------------------------------------------------------------------ 工厂方法
 
     /**
@@ -70,20 +63,6 @@ public class AgentResponse {
                 .message(message)
                 .data(data != null ? data : new HashMap<>())
                 .event(event)
-                .build();
-    }
-
-    /**
-     * 创建一个成功响应，携带事件和下一个 Agent 建议。
-     */
-    public static AgentResponse success(String message, Map<String, Object> data,
-                                        AgentEvent event, String nextAgent) {
-        return AgentResponse.builder()
-                .success(true)
-                .message(message)
-                .data(data != null ? data : new HashMap<>())
-                .event(event)
-                .nextAgent(nextAgent)
                 .build();
     }
 

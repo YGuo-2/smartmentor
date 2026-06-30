@@ -93,15 +93,15 @@ public class AgentContext {
     // ------------------------------------------------------------------ 辅助方法
 
     /**
-     * 浅拷贝当前上下文（集合字段做一层拷贝，避免共享引用）。
-     * 用于需要分叉执行时创建独立副本。
+     * 深拷贝当前上下文。对 weakPoints / sessionData 等含嵌套集合的字段做逐层拷贝，
+     * 使副本与原上下文互不影响——用于事件链分叉执行时创建独立副本。
      */
     public AgentContext cloneContext() {
         return AgentContext.builder()
                 .studentId(this.studentId)
                 .module(this.module)
                 .diagnosticId(this.diagnosticId)
-                .weakPoints(new ArrayList<>(this.weakPoints))
+                .weakPoints(deepCopyMapList(this.weakPoints))
                 .knowledgeMastery(new HashMap<>(this.knowledgeMastery))
                 .errorPatterns(new HashMap<>(this.errorPatterns))
                 .rootCauses(new ArrayList<>(this.rootCauses))
@@ -111,6 +111,17 @@ public class AgentContext {
                 .sessionData(new HashMap<>(this.sessionData))
                 .events(new ArrayList<>(this.events))
                 .build();
+    }
+
+    /** 对 {@code List<Map>} 做一层元素拷贝，避免副本与原列表共享内层 Map 引用。 */
+    private static List<Map<String, Object>> deepCopyMapList(List<Map<String, Object>> src) {
+        List<Map<String, Object>> copy = new ArrayList<>();
+        if (src != null) {
+            for (Map<String, Object> m : src) {
+                copy.add(m != null ? new HashMap<>(m) : null);
+            }
+        }
+        return copy;
     }
 
     /**

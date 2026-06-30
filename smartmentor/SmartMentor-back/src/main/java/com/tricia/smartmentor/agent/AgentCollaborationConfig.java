@@ -68,8 +68,12 @@ public class AgentCollaborationConfig {
 
         // 掌握度未达标 → 重新生成教学内容（降低难度）
         orchestrator.on(AgentEvent.MASTERY_NOT_REACHED, ctx -> {
-            log.info("[协作] 掌握度未达标，重新生成教学内容 studentId={}", ctx.getStudentId());
-            // 降低当前节点的掌握度估计，让 TeachingAgent 使用更基础的策略
+            log.info("[协作] 掌握度未达标，降难度重新生成教学内容 studentId={}", ctx.getStudentId());
+            // 降低当前节点的掌握度估计，让 TeachingAgent 落入更基础的教学策略（<0.4 触发 foundation 策略）
+            Object m = ctx.getSessionData().get("masteryLevel");
+            double cur = (m instanceof Number) ? ((Number) m).doubleValue() : 0.5;
+            ctx.putSessionData("masteryLevel", Math.max(0.0, cur - 0.2));
+            ctx.putSessionData("contentScope", TeachingAgent.SCOPE_FULL);
             return teachingAgent.execute(ctx);
         });
 
@@ -80,12 +84,14 @@ public class AgentCollaborationConfig {
         });
 
         // 连续错误 → 触发教学干预
+        // 预留链路：当前尚无端点统计"同题型连续出错"并 fire 此事件，注册保留待后续接入（YAGNI，暂不造触发端点）。
         orchestrator.on(AgentEvent.CONSECUTIVE_ERRORS, ctx -> {
             log.info("[协作] 检测到连续错误，启动教学干预 studentId={}", ctx.getStudentId());
             return teachingAgent.execute(ctx);
         });
 
         // 发现新薄弱点 → 追溯
+        // 预留链路：当前尚无端点在教学过程中检出新薄弱点并 fire 此事件，注册保留待后续接入。
         orchestrator.on(AgentEvent.NEW_WEAKNESS_FOUND, ctx -> {
             log.info("[协作] 发现新薄弱点，启动追溯 studentId={}", ctx.getStudentId());
             return tracingAgent.execute(ctx);

@@ -143,6 +143,7 @@ public class DiagnosticService {
         }
 
         // Call DiagnosticAgent to generate questions via LLM
+        // 刻意直调：诊断出题是事件链的源头（generate 分支不产出事件），无上游事件可经 orchestrator 触发。
         AgentResponse response = diagnosticAgent.execute(context);
 
         List<Map<String, Object>> questions = Collections.emptyList();
@@ -507,6 +508,8 @@ public class DiagnosticService {
             context.putSessionData("questions", questions);
             context.putSessionData("answers", answersMap);
 
+            // 刻意直调：诊断分析（DiagnosticAgent）是事件链源头，自身产出 DIAGNOSIS_COMPLETE 供溯源端点消费，
+            // 但它不消费任何上游事件，故无需经 orchestrator 触发。溯源端点会在后续独立请求里 fire DIAGNOSIS_COMPLETE。
             AgentResponse analyzeResponse = diagnosticAgent.execute(context);
 
             if (analyzeResponse.isSuccess()) {

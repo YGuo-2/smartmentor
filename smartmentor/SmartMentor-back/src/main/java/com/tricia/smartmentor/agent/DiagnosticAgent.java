@@ -372,16 +372,31 @@ public class DiagnosticAgent extends BaseAgent {
         for (Map<String, Object> q : questions) {
             String qId = String.valueOf(q.get("id"));
             String studentAnswer = answers.getOrDefault(qId, "未作答");
-            String correctAnswer = String.valueOf(q.get("correctAnswer"));
-            boolean isCorrect = studentAnswer.equalsIgnoreCase(correctAnswer);
+            String qType = String.valueOf(q.getOrDefault("type", "choice"));
+            boolean subjectiveType = "fill".equals(qType) || "subjective".equals(qType);
+            // 客观题（单选/判断）用 correctAnswer 等值比较；填空/主观题生成时用的是 referenceAnswer 字段，
+            // 不能按 correctAnswer 等值判分（会取到 "null" 恒判错），交由 LLM 依参考答案/评分要点判定。
+            String referenceAnswer = String.valueOf(q.getOrDefault("referenceAnswer",
+                    q.getOrDefault("correctAnswer", "")));
+            String correctAnswer = subjectiveType
+                    ? referenceAnswer
+                    : String.valueOf(q.get("correctAnswer"));
 
             sb.append("### 题目 ").append(qId).append("\n");
+            sb.append("- 题型：").append(qType).append("\n");
             sb.append("- 知识点：").append(q.get("knowledgePointId")).append("\n");
             sb.append("- 题目：").append(q.get("question")).append("\n");
-            sb.append("- 选项：").append(q.get("options")).append("\n");
-            sb.append("- 正确答案：").append(correctAnswer).append("\n");
-            sb.append("- 学生答案：").append(studentAnswer).append("\n");
-            sb.append("- 结果：").append(isCorrect ? "✓ 正确" : "✗ 错误").append("\n");
+            if (!subjectiveType) {
+                sb.append("- 选项：").append(q.get("options")).append("\n");
+                sb.append("- 正确答案：").append(correctAnswer).append("\n");
+                sb.append("- 学生答案：").append(studentAnswer).append("\n");
+                boolean isCorrect = studentAnswer.equalsIgnoreCase(correctAnswer);
+                sb.append("- 结果：").append(isCorrect ? "✓ 正确" : "✗ 错误").append("\n");
+            } else {
+                sb.append("- 参考答案：").append(referenceAnswer).append("\n");
+                sb.append("- 学生答案：").append(studentAnswer).append("\n");
+                sb.append("- 结果：请根据参考答案/评分要点判断学生作答是否正确（语义等价即算正确，不要求字面一致）\n");
+            }
             sb.append("- 难度：").append(q.get("difficulty")).append("\n");
             sb.append("- 预期错误类型：").append(q.get("errorType")).append("\n\n");
         }
@@ -516,7 +531,7 @@ public class DiagnosticAgent extends BaseAgent {
         String message = String.format("诊断完成：得分 %d 分，发现 %d 个薄弱知识点",
                 score, weakPoints.size());
 
-        return AgentResponse.success(message, data, AgentEvent.DIAGNOSIS_COMPLETE, "TracingAgent");
+        return AgentResponse.success(message, data, AgentEvent.DIAGNOSIS_COMPLETE);
     }
 
     // ================================================================== 辅助方法
