@@ -222,23 +222,55 @@ public abstract class BaseAgent {
         // 去除 markdown 代码块标记
         String cleaned = raw.replaceAll("(?s)```json\\s*", "").replaceAll("(?s)```\\s*", "").trim();
 
-        // 找到第一个 { 或 [ 作为起点
-        int start = -1;
-        char open = 0, close = 0;
+        // 扫描候选 JSON 值：优先接受可解析的 JSON 对象；数组也可作为 extractJson 的返回值。
+        // 这样可跳过 LLM 常见的日志/标题前缀（如 "[结果] { ... }"、"{提示} { ... }"）。
+        String firstObjectCandidate = null;
+        String firstArrayCandidate = null;
         for (int i = 0; i < cleaned.length(); i++) {
             char c = cleaned.charAt(i);
-            if (c == '{') { start = i; open = '{'; close = '}'; break; }
-            if (c == '[') { start = i; open = '['; close = ']'; break; }
+            if (c != '{' && c != '[') {
+                continue;
+            }
+            String candidate = extractBalancedValue(cleaned, i, c == '{' ? '{' : '[', c == '{' ? '}' : ']');
+            if (candidate == null) {
+                continue;
+            }
+            if (c == '{' && firstObjectCandidate == null) {
+                firstObjectCandidate = candidate;
+            } else if (c == '[' && firstArrayCandidate == null) {
+                firstArrayCandidate = candidate;
+            }
+            if (isValidJson(candidate)) {
+                return candidate;
+            }
         }
-        if (start == -1) {
-            return cleaned;
+        if (firstObjectCandidate != null) {
+            return firstObjectCandidate;
+        }
+        if (firstArrayCandidate != null) {
+            return firstArrayCandidate;
         }
 
+        // 未找到平衡结构时回退到原有粗切兜底，保留对截断/轻微瑕疵 JSON 的宽松解析机会。
+        int objStart = cleaned.indexOf('{');
+        int objEnd = cleaned.lastIndexOf('}');
+        if (objStart != -1 && objEnd > objStart) {
+            return cleaned.substring(objStart, objEnd + 1);
+        }
+        int arrStart = cleaned.indexOf('[');
+        int arrEnd = cleaned.lastIndexOf(']');
+        if (arrStart != -1 && arrEnd > arrStart) {
+            return cleaned.substring(arrStart, arrEnd + 1);
+        }
+        return cleaned;
+    }
+
+    private String extractBalancedValue(String text, int start, char open, char close) {
         int depth = 0;
         boolean inString = false;
         boolean escaped = false;
-        for (int i = start; i < cleaned.length(); i++) {
-            char c = cleaned.charAt(i);
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
             if (inString) {
                 if (escaped) {
                     escaped = false;
@@ -256,16 +288,20 @@ public abstract class BaseAgent {
             } else if (c == close) {
                 depth--;
                 if (depth == 0) {
-                    return cleaned.substring(start, i + 1);
+                    return text.substring(start, i + 1);
                 }
             }
         }
-        // 未找到平衡的闭合括号（可能被截断），回退到原有粗切兜底
-        int lastClose = cleaned.lastIndexOf(close);
-        if (lastClose > start) {
-            return cleaned.substring(start, lastClose + 1);
+        return null;
+    }
+
+    private boolean isValidJson(String candidate) {
+        try {
+            objectMapper.readTree(candidate);
+            return true;
+        } catch (Exception ignored) {
+            return false;
         }
-        return cleaned;
     }
 
     /**

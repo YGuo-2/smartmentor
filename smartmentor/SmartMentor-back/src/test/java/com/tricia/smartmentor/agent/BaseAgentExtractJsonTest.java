@@ -54,6 +54,21 @@ class BaseAgentExtractJsonTest {
     }
 
     @Test
+    void skipsNonJsonBracketPrefixBeforeObject() {
+        String raw = "[结果] {\"score\": 80, \"weakPoints\": []}";
+        Map<String, Object> parsed = agent.parse(raw);
+        Assertions.assertEquals(80, ((Number) parsed.get("score")).intValue());
+        Assertions.assertTrue(parsed.containsKey("weakPoints"));
+    }
+
+    @Test
+    void skipsNonJsonObjectPrefixBeforeObject() {
+        String raw = "{结果如下} {\"score\": 88}";
+        Map<String, Object> parsed = agent.parse(raw);
+        Assertions.assertEquals(88, ((Number) parsed.get("score")).intValue());
+    }
+
+    @Test
     void blankReturnsEmptyObject() {
         Assertions.assertEquals("{}", agent.pub("   "));
     }

@@ -155,11 +155,9 @@ public class LlmService {
         try {
             return call.apply(primary);
         } catch (LlmApiException e) {
-            // 确定性错误（4xx，如密钥/参数错误）：回退到备用提供商也会同样失败，且白白多耗一轮重试，直接抛出
             if (!e.isRetryable()) {
-                log.warn("主用大模型[{}]确定性错误(status={})，跳过回退：{}",
+                log.warn("主用大模型[{}]不可重试错误(status={})，不再重试主用，将按配置尝试备用：{}",
                         primary.providerName(), e.getStatusCode(), e.getMessage());
-                throw e;
             }
             return fallbackOrThrow(primary, call, e);
         } catch (RuntimeException e) {
