@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -218,6 +219,7 @@ public class DiagnosticService {
     /**
      * Submit an answer - check against AI-generated questions
      */
+    @Transactional
     public Map<String, Object> submitAnswer(Long studentId, String diagnosticId, Long questionId, String answer, Integer timeSpent) {
         DiagnosticSession session = diagnosticSessionRepository.findByDiagnosticId(diagnosticId)
                 .orElseThrow(() -> new BusinessException(404, "诊断会话不存在"));

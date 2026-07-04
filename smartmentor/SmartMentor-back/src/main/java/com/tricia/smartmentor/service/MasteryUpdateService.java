@@ -7,13 +7,17 @@ import com.tricia.smartmentor.entity.StudentProfile;
 import com.tricia.smartmentor.repository.MasteryHistoryRepository;
 import com.tricia.smartmentor.repository.StudentProfileRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -23,13 +27,14 @@ public class MasteryUpdateService {
     private static final double P_SLIP = 0.15;
     private static final double P_GUESS = 0.1;
     private static final double P_TRANSIT = 0.2;
+    private static final int MAX_OPTIMISTIC_RETRIES = 3;
 
     private final StudentProfileRepository studentProfileRepository;
     private final MasteryHistoryRepository masteryHistoryRepository;
     private final KnowledgeGraphService knowledgeGraphService;
     private final ObjectMapper objectMapper;
+    private final PlatformTransactionManager transactionManager;
 
-    @Transactional
     public double updateFromAnswer(Long studentId,
                                    String knowledgePointId,
                                    String module,
@@ -38,7 +43,18 @@ public class MasteryUpdateService {
         if (knowledgePointId == null || knowledgePointId.isBlank()) {
             return DEFAULT_MASTERY;
         }
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            return doUpdateFromAnswer(studentId, knowledgePointId, module, correct, source);
+        }
+        return withOptimisticRetry(() -> inTransaction(
+                () -> doUpdateFromAnswer(studentId, knowledgePointId, module, correct, source)));
+    }
 
+    private double doUpdateFromAnswer(Long studentId,
+                                      String knowledgePointId,
+                                      String module,
+                                      boolean correct,
+                                      String source) {
         StudentProfile profile = studentProfileRepository.findByStudentId(studentId)
                 .orElseGet(() -> createProfile(studentId));
 
@@ -50,7 +66,7 @@ public class MasteryUpdateService {
         double overallMastery = calculateOverallMastery(knowledgeState);
         profile.setKnowledgeState(toJson(knowledgeState));
         profile.setOverallMastery(toBigDecimal(overallMastery, 2));
-        studentProfileRepository.save(profile);
+        studentProfileRepository.saveAndFlush(profile);
 
         MasteryHistory history = new MasteryHistory();
         history.setStudentId(studentId);
@@ -64,7 +80,6 @@ public class MasteryUpdateService {
         return nextMastery;
     }
 
-    @Transactional
     public void recordKnowledgePointMastery(Long studentId,
                                             String knowledgePointId,
                                             String module,
@@ -73,7 +88,21 @@ public class MasteryUpdateService {
         if (knowledgePointId == null || knowledgePointId.isBlank()) {
             return;
         }
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            doRecordKnowledgePointMastery(studentId, knowledgePointId, module, mastery, source);
+            return;
+        }
+        withOptimisticRetry(() -> inTransaction(() -> {
+            doRecordKnowledgePointMastery(studentId, knowledgePointId, module, mastery, source);
+            return null;
+        }));
+    }
 
+    private void doRecordKnowledgePointMastery(Long studentId,
+                                               String knowledgePointId,
+                                               String module,
+                                               double mastery,
+                                               String source) {
         StudentProfile profile = studentProfileRepository.findByStudentId(studentId)
                 .orElseGet(() -> createProfile(studentId));
 
@@ -84,7 +113,7 @@ public class MasteryUpdateService {
         double overallMastery = calculateOverallMastery(knowledgeState);
         profile.setKnowledgeState(toJson(knowledgeState));
         profile.setOverallMastery(toBigDecimal(overallMastery, 2));
-        studentProfileRepository.save(profile);
+        studentProfileRepository.saveAndFlush(profile);
 
         MasteryHistory history = new MasteryHistory();
         history.setStudentId(studentId);
@@ -99,7 +128,26 @@ public class MasteryUpdateService {
     private StudentProfile createProfile(Long studentId) {
         StudentProfile profile = new StudentProfile();
         profile.setStudentId(studentId);
-        return studentProfileRepository.save(profile);
+        return studentProfileRepository.saveAndFlush(profile);
+    }
+
+    private <T> T inTransaction(Supplier<T> action) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        return transactionTemplate.execute(status -> action.get());
+    }
+
+    private <T> T withOptimisticRetry(Supplier<T> action) {
+        int attempt = 0;
+        while (true) {
+            try {
+                return action.get();
+            } catch (OptimisticLockingFailureException e) {
+                attempt++;
+                if (attempt >= MAX_OPTIMISTIC_RETRIES) {
+                    throw e;
+                }
+            }
+        }
     }
 
     private double updateBkt(double currentMastery, boolean correct) {

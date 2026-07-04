@@ -50,7 +50,11 @@ public abstract class AbstractOpenAiChatClient implements ChatModelClient {
         this.model = model;
         this.jsonModeSupported = jsonModeSupported;
         this.objectMapper = objectMapper;
+        Dispatcher dispatcher = new Dispatcher();
+        dispatcher.setMaxRequests(200);
+        dispatcher.setMaxRequestsPerHost(50);
         this.httpClient = new OkHttpClient.Builder()
+                .dispatcher(dispatcher)
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(180, TimeUnit.SECONDS)
                 .writeTimeout(30, TimeUnit.SECONDS)

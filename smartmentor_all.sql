@@ -77,6 +77,7 @@ CREATE TABLE sms_code (
 -- 学生五维画像
 CREATE TABLE student_profile (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  version BIGINT NOT NULL DEFAULT 0 COMMENT '乐观锁版本',
   student_id BIGINT UNSIGNED NOT NULL,
   -- 五维画像
   knowledge_state DECIMAL(3,2) NOT NULL DEFAULT 0.00 COMMENT '知识状态维度 0-1',
@@ -929,6 +930,7 @@ CALL smartmentor_add_profile_column('academic_interest',    'VARCHAR(255) DEFAUL
 CALL smartmentor_add_profile_column('target_score',         'INT DEFAULT NULL COMMENT ''目标分数或目标等级''');
 CALL smartmentor_add_profile_column('weak_module_priority', 'JSON DEFAULT NULL COMMENT ''薄弱课程模块优先级''');
 CALL smartmentor_add_profile_column('study_mode',           'VARCHAR(20) DEFAULT ''systematic'' COMMENT ''学习模式''');
+CALL smartmentor_add_profile_column('version',              'BIGINT NOT NULL DEFAULT 0 COMMENT ''乐观锁版本''');
 
 DROP PROCEDURE IF EXISTS smartmentor_add_profile_column;
 

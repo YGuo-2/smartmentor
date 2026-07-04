@@ -6,10 +6,12 @@ import com.tricia.smartmentor.util.RedisUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -146,6 +148,8 @@ public class ChatService {
             session.setKnowledgePointName(resolveKnowledgePointName(studentId, pathId, nodeId));
             session.setMessageCount(0);
             session = chatSessionRepository.save(session);
+        } else {
+            assertSessionOwner(session, studentId);
         }
 
         // 保存学生消息
@@ -170,7 +174,7 @@ public class ChatService {
         // === 学习资源检索：当学生在对话中索要资料/视频时，检索并推送资源卡片 ===
         final List<Map<String, Object>> learningResources = new ArrayList<>();
         if (wantsLearningResource(message)) {
-            String query = resolveResourceQuery(sid, message, fSession.getKnowledgePointName());
+            String query = resolveResourceQuery(studentId, sid, message, fSession.getKnowledgePointName());
             if (query != null && !query.isBlank()) {
                 try {
                     learningResources.addAll(bilibiliVideoService.searchLearningVideos(query, 5));
@@ -302,7 +306,7 @@ public class ChatService {
         }
 
         // 2. 历史对话（排除刚刚保存的当前学生消息）
-        List<ChatMessage> history = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+        List<ChatMessage> history = chatMessageRepository.findBySessionIdAndStudentIdOrderByCreatedAtAsc(sessionId, studentId);
         // 去掉最后一条（就是当前消息）
         if (!history.isEmpty() && "student".equals(history.get(history.size() - 1).getRole())) {
             history = history.subList(0, history.size() - 1);
@@ -563,7 +567,7 @@ public class ChatService {
             }
             profileUpdateExecutor.submit(() -> {
                 try {
-                    String convo = buildRecentConversationText(sessionId, 12);
+                    String convo = buildRecentConversationText(studentId, sessionId, 12);
                     if (convo != null && !convo.isBlank()) {
                         conversationalProfileService.extractAndApply(studentId, convo, false);
                         detectAndApplyWeakSignals(studentId, convo);
@@ -788,8 +792,8 @@ public class ChatService {
     }
 
     /** 取最近 maxMessages 条对话拼成「学生/导师」文本，供画像抽取 */
-    private String buildRecentConversationText(String sessionId, int maxMessages) {
-        List<ChatMessage> history = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+    private String buildRecentConversationText(Long studentId, String sessionId, int maxMessages) {
+        List<ChatMessage> history = chatMessageRepository.findBySessionIdAndStudentIdOrderByCreatedAtAsc(sessionId, studentId);
         if (history.isEmpty()) {
             return "";
         }
@@ -810,13 +814,13 @@ public class ChatService {
         Map<String, Object> result = new LinkedHashMap<>();
 
         if (sessionId != null && !sessionId.isEmpty()) {
-            List<ChatMessage> messages = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
-
             ChatSession session = chatSessionRepository.findBySessionId(sessionId).orElse(null);
-            if (session != null && !session.getStudentId().equals(studentId)) {
-                result.put("error", "无权访问该会话");
-                return result;
+            if (session == null) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "会话不存在");
             }
+            assertSessionOwner(session, studentId);
+
+            List<ChatMessage> messages = chatMessageRepository.findBySessionIdAndStudentIdOrderByCreatedAtAsc(sessionId, studentId);
 
             List<Map<String, Object>> msgList = new ArrayList<>();
             for (ChatMessage msg : messages) {
@@ -833,20 +837,16 @@ public class ChatService {
             }
 
             result.put("sessionId", sessionId);
-            if (session != null) {
-                result.put("title", session.getTitle());
-                Map<String, Object> relatedPath = new LinkedHashMap<>();
-                relatedPath.put("pathId", session.getPathId());
-                relatedPath.put("targetKnowledgePoint", session.getKnowledgePointName());
-                relatedPath.put("currentNode", session.getKnowledgePointName());
-                result.put("relatedPath", relatedPath);
-            }
+            result.put("title", session.getTitle());
+            Map<String, Object> relatedPath = new LinkedHashMap<>();
+            relatedPath.put("pathId", session.getPathId());
+            relatedPath.put("targetKnowledgePoint", session.getKnowledgePointName());
+            relatedPath.put("currentNode", session.getKnowledgePointName());
+            result.put("relatedPath", relatedPath);
             result.put("messages", msgList);
             result.put("totalMessages", msgList.size());
-            if (session != null) {
-                result.put("createdAt", session.getCreatedAt());
-                result.put("lastActiveAt", session.getLastActiveAt());
-            }
+            result.put("createdAt", session.getCreatedAt());
+            result.put("lastActiveAt", session.getLastActiveAt());
         } else {
             Pageable pageable = PageRequest.of(page, size);
             Page<ChatSession> sessionPage;
@@ -885,6 +885,12 @@ public class ChatService {
         return result;
     }
 
+    private void assertSessionOwner(ChatSession session, Long studentId) {
+        if (!Objects.equals(session.getStudentId(), studentId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权访问该会话");
+        }
+    }
+
     // ======================== 工具方法 ========================
 
     private static final String[] RESOURCE_INTENT_KEYWORDS = {
@@ -918,12 +924,12 @@ public class ChatService {
      * 解析学生想检索的学习主题：结合最近对话用 AI 抽取，失败回退知识点/启发式；
      * 解析不到有效主题则返回 null（宁可不推卡片，也不推无关内容）。
      */
-    private String resolveResourceQuery(String sessionId, String message, String fallbackKnowledgePoint) {
+    private String resolveResourceQuery(Long studentId, String sessionId, String message, String fallbackKnowledgePoint) {
         boolean hasKnowledgePoint = fallbackKnowledgePoint != null && !fallbackKnowledgePoint.isBlank();
         // 学生最新消息是否自带新主题：剥离“重新/找一下/视频”等指令词后仍有实质内容
         boolean messageHasOwnTopic = isValidTopic(extractResourceQuery(message, null));
 
-        String recentContext = buildRecentTopicContext(sessionId);
+        String recentContext = buildRecentTopicContext(studentId, sessionId);
         String aiTopic = null;
         try {
             String sys = "你是学习视频检索词抽取器。根据【当前知识点】【最近对话】和【学生最新消息】，"
@@ -971,7 +977,7 @@ public class ChatService {
         // 5) 从最近对话里挖掘上一个有效主题（不依赖 AI）：
         //    指令型消息如“再来几个/换一批”在前几轮已出现过主题，确定性地复用它，
         //    消除因 AI 抽取偶发失败导致的“有概率不推荐”。
-        String recentTopic = mineRecentTopic(sessionId);
+        String recentTopic = mineRecentTopic(studentId, sessionId);
         return isValidTopic(recentTopic) ? recentTopic : null;
     }
 
@@ -981,9 +987,9 @@ public class ChatService {
      * 其次取上一条 AI 回复开头的标题/知识点。窗口刻意收窄，避免捞到几轮前的旧主题
      * 导致“推荐卡片与当前主题无关”。
      */
-    private String mineRecentTopic(String sessionId) {
+    private String mineRecentTopic(Long studentId, String sessionId) {
         try {
-            List<ChatMessage> history = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+            List<ChatMessage> history = chatMessageRepository.findBySessionIdAndStudentIdOrderByCreatedAtAsc(sessionId, studentId);
             // 末条通常是刚保存的当前消息（指令型），从它之前开始回看，窗口仅 1 轮
             int end = history.size() - 1;
             int floor = Math.max(0, end - 4);
@@ -1070,9 +1076,9 @@ public class ChatService {
     /**
      * 取最近若干条对话内容作为主题解析上下文（用于解析"重新找/再来一个"等指代）
      */
-    private String buildRecentTopicContext(String sessionId) {
+    private String buildRecentTopicContext(Long studentId, String sessionId) {
         try {
-            List<ChatMessage> history = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+            List<ChatMessage> history = chatMessageRepository.findBySessionIdAndStudentIdOrderByCreatedAtAsc(sessionId, studentId);
             // 末条通常是刚保存的当前消息（指令型），主题解析靠它之前的对话，故排除末条
             int upper = Math.max(0, history.size() - 1);
             int start = Math.max(0, upper - 4); // 仅最近 2 轮，强就近关联

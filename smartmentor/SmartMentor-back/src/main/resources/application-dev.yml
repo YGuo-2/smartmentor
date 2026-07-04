@@ -17,7 +17,7 @@ smartmentor:
     password: ${SMARTMENTOR_REDIS_PASSWORD:}
     database: ${SMARTMENTOR_REDIS_DATABASE:11}
   jwt:
-    secret: ${SMARTMENTOR_JWT_SECRET:SmartMentorDevOnlyChangeMeSecretKeyForJWTTokenGeneration2026}
+    secret: ${SMARTMENTOR_JWT_SECRET}
     expiration: ${SMARTMENTOR_JWT_EXPIRATION:86400000}
   mail:
     host: ${SMARTMENTOR_MAIL_HOST:smtp.qq.com}

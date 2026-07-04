@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +34,12 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 public abstract class BaseAgent {
+    private static final ExecutorService RUN_LOG_EXECUTOR =
+            Executors.newFixedThreadPool(2, r -> {
+                Thread t = new Thread(r, "agent-run-log-writer");
+                t.setDaemon(true);
+                return t;
+            });
 
     protected final LlmService llmService;
     protected final ObjectMapper objectMapper;
@@ -357,6 +365,14 @@ public abstract class BaseAgent {
             runLog.setInputSummary(buildInputSummary(context, prompt));
             runLog.setOutputSummary(buildOutputSummary(response, llmResponse, error));
             runLog.setErrorMessage(error != null ? truncate(error.getMessage(), 2000) : null);
+            RUN_LOG_EXECUTOR.submit(() -> persistRunLog(runLog));
+        } catch (Exception logError) {
+            log.warn("[{}] Agent运行日志保存失败: {}", getName(), logError.getMessage());
+        }
+    }
+
+    private void persistRunLog(AgentRunLog runLog) {
+        try {
             agentRunLogRepository.save(runLog);
         } catch (Exception logError) {
             log.warn("[{}] Agent运行日志保存失败: {}", getName(), logError.getMessage());

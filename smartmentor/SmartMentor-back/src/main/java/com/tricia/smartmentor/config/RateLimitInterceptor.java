@@ -2,6 +2,7 @@ package com.tricia.smartmentor.config;
 
 import com.tricia.smartmentor.util.RedisUtil;
 import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.HandlerMapping;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import javax.servlet.http.HttpServletRequest;
@@ -28,14 +29,14 @@ public class RateLimitInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response,
                              Object handler) throws Exception {
-        String uri = request.getRequestURI();
+        String route = getRoutePattern(request);
         String userId = getUserId(request);
 
         int maxCount;
         int windowSeconds;
 
         // Chat stream 更严格的限流
-        if (uri.contains("/api/chat/stream")) {
+        if (route.contains("/api/chat/stream")) {
             maxCount = CHAT_MAX_COUNT;
             windowSeconds = CHAT_WINDOW_SECONDS;
         } else {
@@ -43,7 +44,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
             windowSeconds = DEFAULT_WINDOW_SECONDS;
         }
 
-        String key = "rate_limit:" + userId + ":" + uri;
+        String key = "rate_limit:" + userId + ":" + request.getMethod() + ":" + route;
 
         try {
             if (!redisUtil.isAllowed(key, maxCount, windowSeconds)) {
@@ -58,6 +59,14 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         }
 
         return true;
+    }
+
+    private String getRoutePattern(HttpServletRequest request) {
+        Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        if (pattern instanceof String && !((String) pattern).isBlank()) {
+            return (String) pattern;
+        }
+        return request.getRequestURI();
     }
 
     private String getUserId(HttpServletRequest request) {

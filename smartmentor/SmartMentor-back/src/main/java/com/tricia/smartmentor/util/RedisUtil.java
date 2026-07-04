@@ -2,6 +2,7 @@ package com.tricia.smartmentor.util;
 
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -11,6 +12,15 @@ import java.util.concurrent.TimeUnit;
 public class RedisUtil {
 
     private final RedisTemplate<String, Object> redisTemplate;
+    private static final DefaultRedisScript<Long> SLIDING_WINDOW_RATE_LIMIT_SCRIPT =
+            new DefaultRedisScript<>(
+                    "redis.call('ZREMRANGEBYSCORE', KEYS[1], 0, ARGV[1]); " +
+                            "local count = redis.call('ZCARD', KEYS[1]); " +
+                            "if count >= tonumber(ARGV[2]) then return 0; end; " +
+                            "redis.call('ZADD', KEYS[1], ARGV[3], ARGV[4]); " +
+                            "redis.call('EXPIRE', KEYS[1], tonumber(ARGV[5])); " +
+                            "return 1;",
+                    Long.class);
 
     public RedisUtil(RedisTemplate<String, Object> redisTemplate) {
         this.redisTemplate = redisTemplate;
@@ -109,19 +119,16 @@ public class RedisUtil {
     public boolean isAllowed(String key, int maxCount, int windowSeconds) {
         long now = System.currentTimeMillis();
         long windowStart = now - windowSeconds * 1000L;
+        String member = now + "-" + UUID.randomUUID();
 
-        // Remove expired entries
-        redisTemplate.opsForZSet().removeRangeByScore(key, 0, windowStart);
-
-        // Count current window
-        Long count = redisTemplate.opsForZSet().zCard(key);
-        if (count != null && count >= maxCount) {
-            return false;
-        }
-
-        // Add current request
-        redisTemplate.opsForZSet().add(key, String.valueOf(now), now);
-        redisTemplate.expire(key, windowSeconds + 1, TimeUnit.SECONDS);
-        return true;
+        Long allowed = redisTemplate.execute(
+                SLIDING_WINDOW_RATE_LIMIT_SCRIPT,
+                Collections.singletonList(key),
+                String.valueOf(windowStart),
+                String.valueOf(maxCount),
+                String.valueOf(now),
+                member,
+                String.valueOf(windowSeconds + 1));
+        return Long.valueOf(1L).equals(allowed);
     }
 }

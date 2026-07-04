@@ -52,7 +52,7 @@
           <div class="hero-copy">
             <span class="label" data-reveal data-od-id="hero-label">Software Cup A3 <span class="ix">· Nº 01</span></span>
             <h1 class="display" data-reveal data-od-id="hero-title">让每一次错误回到它的<em>根因</em><span class="dot">.</span></h1>
-            <p class="lead" data-reveal data-od-id="hero-lead">SmartMentor 不是普通聊天套壳。它用五个 Agent 串联诊断、知识图谱溯源、DAG 路径规划、教学资源生成与评估回环，把学生端与教师端连接成一套可演示的学习闭环。</p>
+            <p class="lead" data-reveal data-od-id="hero-lead">五个 Agent 接力完成诊断、溯源、规划、教学与评估：先定位错误背后的根因知识点，再沿知识图谱生成学习路径，学完自动检验，未达标自动补救。</p>
             <div class="hero-actions" data-reveal>
               <a class="btn btn-primary" href="#agents" data-od-id="hero-cta-primary">看五智能体 <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19L19 5M19 5H8M19 5v11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
               <a class="btn btn-ghost" href="#loop" data-od-id="hero-cta-secondary">看学习闭环 <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 12h6M12 9v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
@@ -134,10 +134,10 @@
             <div data-reveal>
               <span class="label" data-od-id="problem-label">Problem <span class="ix">· Nº 02</span></span>
               <h2 class="display" data-od-id="problem-title">不是再刷十道题，而是找到真正<em>断裂</em>的位置<span class="dot">.</span></h2>
-              <p class="lead" data-od-id="problem-copy">传统学习工具常停在“你错了这道题”。SmartMentor 的叙事改为“这道题错在哪里，根因在哪个前置知识点，应该先补哪一段路径”。页面第一屏就让评审读懂这个差异。</p>
+              <p class="lead" data-od-id="problem-copy">传统学习工具停在“你错了这道题”。SmartMentor 会继续往下问：错在哪一步？根因在哪个前置知识点？应该先补哪一段？</p>
               <div class="about-proof">
                 <div class="proof-item" data-od-id="proof-root"><b>根因追溯</b>沿知识图谱前驱链回溯，不只停在错题表层。</div>
-                <div class="proof-item" data-od-id="proof-profile"><b>五维画像</b>知识状态、错误模式、学习行为、认知风格、目标画像共同参与决策。</div>
+                <div class="proof-item" data-od-id="proof-profile"><b>五维画像</b>知识状态、错误模式、学习行为、认知风格与学习目标共同参与决策。</div>
                 <div class="proof-item" data-od-id="proof-quality"><b>质量保障</b>RAG 锚定、LLM 自检、规则校验减少生成幻觉。</div>
               </div>
             </div>
@@ -210,11 +210,11 @@
           <div class="method-head">
             <div data-reveal>
               <span class="label" data-od-id="loop-label">Method <span class="ix">· Nº 04</span></span>
-              <h2 class="display" data-od-id="loop-title">一次学习会话从信号走向<em>闭环</em><span class="dot">.</span></h2>
+              <h2 class="display" data-od-id="loop-title">诊断的终点，就是溯源的<em>起点</em><span class="dot">.</span></h2>
             </div>
             <div class="right" data-reveal="right">
               <span class="plus">+</span>
-              <p>事件不是装饰。`DIAGNOSIS_COMPLETE` 到 `TRACING_COMPLETE`，再到掌握度未达标的回流，决定了系统能否自驱动迭代。</p>
+              <p>诊断完成触发溯源，溯源完成触发规划，掌握度未达标自动回流补救——每一步由事件驱动，系统自己往前走。</p>
             </div>
           </div>
           <div class="method-grid">
@@ -229,7 +229,7 @@
             <article class="method-step" data-reveal data-od-id="loop-step-trace">
               <div class="num">II</div>
               <h4>追溯 <span class="dot">→</span></h4>
-              <p>触发 `DIAGNOSIS_COMPLETE`，TracingAgent 追溯前置链。</p>
+              <p>从薄弱点出发，沿前置依赖链回溯到根因知识点。</p>
               <div class="transparent-asset method-asset">
                 <img src="/opendesign-landing/transparent-loop-trace.png" alt="追溯阶段透明拼贴素材" />
               </div>
@@ -237,7 +237,7 @@
             <article class="method-step" data-reveal data-od-id="loop-step-plan">
               <div class="num">III</div>
               <h4>规划 <span class="dot">→</span></h4>
-              <p>`TRACING_COMPLETE` 交给 PlanningAgent，输出 DAG 学习路径。</p>
+              <p>按前置关系把根因到目标排成一条可执行的学习路径。</p>
               <div class="transparent-asset method-asset">
                 <img src="/opendesign-landing/transparent-loop-plan.png" alt="规划阶段透明拼贴素材" />
               </div>
@@ -245,7 +245,7 @@
             <article class="method-step" data-reveal data-od-id="loop-step-evaluate">
               <div class="num">IV</div>
               <h4>评估</h4>
-              <p>EvaluationAgent 判断掌握度，未达标即回流教学或诊断。</p>
+              <p>检查点评估掌握度，未达标自动插入补救节点重新教学。</p>
               <div class="transparent-asset method-asset">
                 <img src="/opendesign-landing/transparent-loop-evaluate.png" alt="评估阶段透明拼贴素材" />
               </div>
@@ -264,7 +264,7 @@
           <div class="labs-head">
             <div data-reveal>
               <span class="label" data-od-id="archive-label">Archive <span class="ix">· Nº 05</span></span>
-              <h2 class="display" data-od-id="archive-title">学生端与教师端都不是展示页，而是可串联的<em>产品功能</em><span class="dot">.</span></h2>
+              <h2 class="display" data-od-id="archive-title">从诊断到报告，每个页面都是闭环上的<em>一环</em><span class="dot">.</span></h2>
             </div>
             <div class="pills" data-reveal="right" role="tablist" aria-label="功能筛选">
               <button class="pill active" type="button" role="tab" aria-selected="true" data-filter="all" data-od-id="filter-all">全部 12</button>
@@ -281,7 +281,7 @@
               </div>
               <div class="num-row"><span>Nº 01</span><span>Diagnostic</span></div>
               <h4>诊断测试</h4>
-              <p>5-8 道题建立当前知识状态，并把答案快照交给服务端评分。</p>
+              <p>5–8 道题定位当前知识状态，评分只认服务端题目快照。</p>
             </article>
             <article class="lab" data-kind="student" data-reveal data-od-id="archive-tracing">
               <div class="transparent-asset lab-art">
@@ -351,7 +351,7 @@
                 <div class="row" data-od-id="teacher-row-2"><b>数字电路译码器</b><span>12 人</span><span class="severity"><span style="width:56%"></span></span><button class="row-action" type="button">生成作业</button></div>
                 <div class="row" data-od-id="teacher-row-3"><b>AI 基础检索</b><span>9 人</span><span class="severity"><span style="width:43%"></span></span><button class="row-action" type="button">生成作业</button></div>
               </div>
-              <p class="lead" style="font-size:18px;margin-top:28px;">教师端不只是看图。热力图下钻到薄弱学生，再触发分层作业，才构成完整教学干预。</p>
+              <p class="lead" style="font-size:18px;margin-top:28px;">从热力图下钻到薄弱学生，一键生成分层作业——诊断结果直接变成教学动作。</p>
             </div>
           </div>
         </div>
@@ -367,8 +367,8 @@
           <div class="evidence-layout">
             <div class="work-copy" data-reveal>
               <span class="label">Evidence</span>
-              <h2>两条路径证明系统已经从演示走向<em>可联调</em><span class="dot">.</span></h2>
-              <p class="evidence-note">把学生侧和教师侧拆成两条证据线：一条证明学习闭环能跑通，一条证明教学干预能落地。</p>
+              <h2>一条学生线，一条教师线，串起完整<em>证据链</em><span class="dot">.</span></h2>
+              <p class="evidence-note">学生线证明学习闭环能跑通，教师线证明教学干预能落地。</p>
               <a class="work-link" href="#top">回到封面</a>
             </div>
             <div class="evidence-paths">
@@ -377,7 +377,7 @@
                 <div>
                   <div class="label-row"><span>Student loop</span><span>Vue 3 · Vite</span></div>
                   <h3>学生端闭环</h3>
-                  <p>仪表盘、诊断历史、溯因分析、学习路径、课程节点、AI 对话、学习报告形成一条完整的 5 分钟演示线。</p>
+                  <p>从一次诊断到一份学习报告，五分钟走完“测—学—测”的完整循环。</p>
                   <ul class="evidence-flow" aria-label="学生端证据链">
                     <li>诊断</li>
                     <li>追溯</li>
@@ -394,7 +394,7 @@
                 <div>
                   <div class="label-row"><span>Teacher loop</span><span>Spring Boot · SSE</span></div>
                   <h3>教师端闭环</h3>
-                  <p>班级管理、知识热力图、薄弱学生下钻、AI 分层作业和班级周报把诊断结果转成可执行干预。</p>
+                  <p>热力图定位班级薄弱点，下钻到学生名单，一键生成分层作业。</p>
                   <ul class="evidence-flow" aria-label="教师端证据链">
                     <li>班级</li>
                     <li>热力图</li>
@@ -421,10 +421,10 @@
           <div class="testimonial-grid">
             <div data-reveal>
               <span class="label" data-od-id="quote-label">Review note <span class="ix">· Nº 08</span></span>
-              <h2 data-od-id="quote-copy">“评审不需要再从按钮堆里寻找亮点；页面第一屏就能读到项目真正的技术抓手：五智能体、知识图谱、DAG 路径与评估回环。”</h2>
+              <h2 data-od-id="quote-copy">“我们没有把大模型当聊天窗口，而是放进诊断、溯源、规划、教学、评估五个环节——每一个结论都能指出它来自哪次作答、哪个知识点。”</h2>
               <div class="author" data-od-id="quote-author">
                 <span class="avatar">S</span>
-                <p>SmartMentor 项目材料提炼<br><span>中国软件杯 A3 展示叙事</span></p>
+                <p>SmartMentor 设计定位<br><span>中国软件杯 A3 参赛作品</span></p>
               </div>
               <div class="evidence-list">
                 <div class="evidence-item" data-od-id="evidence-agent"><b>AgentCollaborationConfig</b>诊断完成触发追溯，追溯完成触发规划，掌握度未达标触发教学补救。</div>
@@ -437,7 +437,7 @@
               <span class="corner tl"></span><span class="corner br"></span>
               <span class="annot annot-tl">FIN. / SM</span>
               <img src="/opendesign-landing/transparent-quote-root.png" alt="评审叙事透明背景拼贴素材" />
-              <figcaption class="ambient-copy">根因<span>透明拼贴退入纸张肌理，让评审叙事保持在前景。</span></figcaption>
+              <figcaption class="ambient-copy">根因<span>每个薄弱点，都能沿依赖链找到它的源头。</span></figcaption>
             </figure>
           </div>
         </div>
@@ -449,7 +449,7 @@
             <div data-reveal>
               <span class="label" data-od-id="cta-label">Final Route <span class="ix">· FIN</span></span>
               <h2 class="display" data-od-id="cta-title">把一次错题，变成下一条<em>学习路径</em><span class="dot">.</span></h2>
-              <p class="lead" data-od-id="cta-copy">从注册进入画像引导，从诊断进入第一条路径；学生侧看到补救节点，教师侧看到班级干预建议。主页的任务是让这条链路在 10 秒内被看懂。</p>
+              <p class="lead" data-od-id="cta-copy">注册后先做画像引导，第一次诊断就生成第一条路径；答错的会被补上，学会的会被验证。</p>
               <div class="cta-actions">
                 <a class="btn btn-primary" href="#agents" data-od-id="cta-primary">查看五智能体 <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19L19 5M19 5H8M19 5v11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
                 <a class="btn btn-ghost" href="#top" data-od-id="cta-secondary">回到顶部</a>
@@ -461,7 +461,7 @@
               <span class="annot annot-tl">Plate Nº 08</span>
               <span class="annot annot-br">FIN.</span>
               <img src="/opendesign-landing/transparent-cta-path.png" alt="收尾路径透明背景拼贴素材" />
-              <figcaption class="ambient-copy">路径<span>收尾视觉以透明素材融入背景过渡，不再作为另一张独立照片出现。</span></figcaption>
+              <figcaption class="ambient-copy">路径<span>从根因到目标，每个节点都有它存在的理由。</span></figcaption>
             </figure>
           </div>
         </div>
@@ -473,7 +473,7 @@
         <div class="foot-grid">
           <div class="foot-brand" data-od-id="footer-brand">
             <a class="brand" href="#top"><span class="brand-mark">S</span><span>SmartMentor</span></a>
-            <p>基于大模型的个性化资源生成与学习多智能体系统。主页改造方向：更少按钮堆叠，更强叙事证据，更明确的学习闭环。</p>
+            <p>基于大模型的个性化资源生成与学习多智体系统：定位根因、规划路径、生成资源、评估回环。</p>
           </div>
           <div class="foot-col"><h5>学生端</h5><ul><li><a href="#archive">诊断测试</a></li><li><a href="#problem">溯因分析</a></li><li><a href="#loop">学习路径</a></li><li><a href="#archive">AI 对话</a></li></ul></div>
           <div class="foot-col"><h5>教师端</h5><ul><li><a href="#teacher">班级热力图</a></li><li><a href="#teacher">分层作业</a></li><li><a href="#teacher">学生预警</a></li><li><a href="#teacher">周报</a></li></ul></div>
