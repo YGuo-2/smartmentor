@@ -16,7 +16,7 @@ import javax.annotation.PostConstruct;
  * MASTERY_NOT_REACHED      → TeachingAgent（重新教学）
  * MASTERY_REACHED          → 日志记录（节点完成，由 Service 层推进）
  * CONSECUTIVE_ERRORS       → TeachingAgent（即时干预补救）
- * NEW_WEAKNESS_FOUND       → TracingAgent（新薄弱点追溯）
+ * NEW_WEAKNESS_FOUND       → TracingAgent（新薄弱点追溯，预留触发）
  * </pre>
  */
 @Slf4j
@@ -84,9 +84,12 @@ public class AgentCollaborationConfig {
         });
 
         // 连续错误 → 触发教学干预
-        // 预留链路：当前尚无端点统计"同题型连续出错"并 fire 此事件，注册保留待后续接入（YAGNI，暂不造触发端点）。
         orchestrator.on(AgentEvent.CONSECUTIVE_ERRORS, ctx -> {
             log.info("[协作] 检测到连续错误，启动教学干预 studentId={}", ctx.getStudentId());
+            Object m = ctx.getSessionData().get("masteryLevel");
+            double cur = (m instanceof Number) ? ((Number) m).doubleValue() : 0.5;
+            ctx.putSessionData("masteryLevel", Math.min(cur, 0.35));
+            ctx.putSessionData("contentScope", TeachingAgent.SCOPE_EXPLAIN);
             return teachingAgent.execute(ctx);
         });
 

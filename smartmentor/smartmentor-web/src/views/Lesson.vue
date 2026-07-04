@@ -221,6 +221,18 @@
                   <div v-if="practiceResult.errorAnalysis?.suggestion">{{ practiceResult.errorAnalysis.suggestion }}</div>
                 </div>
 
+                <div v-if="practiceIntervention" class="practice-intervention">
+                  <div class="practice-intervention-head">
+                    <i class="ri-first-aid-kit-line"></i>
+                    <strong>连续错题干预</strong>
+                  </div>
+                  <p>{{ practiceIntervention.message }}</p>
+                  <div v-if="practiceIntervention.actions?.length" class="intervention-actions">
+                    <span v-for="action in practiceIntervention.actions" :key="action">{{ action }}</span>
+                  </div>
+                  <div v-if="practiceInterventionContent" class="rich-text" v-html="renderMarkdown(practiceInterventionContent)"></div>
+                </div>
+
                 <div class="action-row">
                   <button v-if="!practiceSubmitted" type="button" class="btn btn-dark" :disabled="!selectedPracticeAnswer" @pointerdown.prevent="handleSubmitPracticeAction" @mousedown.prevent="handleSubmitPracticeAction" @click.prevent="handleSubmitPracticeAction">
                     <i class="ri-send-plane-line"></i> 提交练习
@@ -689,6 +701,10 @@ async function loadAnimationAsset(pathId, nodeId) {
 }
 const currentPractice = computed(() => exercises.value[practiceIndex.value] || null)
 const currentCheckpoint = computed(() => exercises.value[checkpointIndex.value] || null)
+const practiceIntervention = computed(() => practiceResult.value?.interventionTriggered
+  ? practiceResult.value?.intervention
+  : null)
+const practiceInterventionContent = computed(() => formatInterventionContent(practiceIntervention.value?.remedialContent))
 const knowledgePointName = computed(() => {
   const kp = nodeData.value?.knowledgePoint
   if (typeof kp === 'string') return kp
@@ -764,6 +780,34 @@ function formatLessonValue(value) {
     return Object.entries(value).map(([key, val]) => `${key}：${formatLessonValue(val)}`).join('\n')
   }
   return String(value)
+}
+
+function formatInterventionContent(content) {
+  if (!content) return ''
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) return normalizeList(content).map(formatLessonValue).filter(Boolean).join('\n')
+  if (typeof content !== 'object') return String(content)
+
+  const lines = []
+  const concept = content.conceptExplanation
+  if (concept && typeof concept === 'object') {
+    const summary = formatLessonValue(concept.summary)
+    const body = formatLessonValue(concept.content)
+    if (summary) lines.push(summary)
+    if (body) lines.push(body)
+  }
+
+  const examples = Array.isArray(content.examples) ? content.examples.slice(0, 1) : []
+  examples.forEach((example, index) => {
+    const title = formatLessonValue(example.title || `例题 ${index + 1}`)
+    const problem = formatLessonValue(example.problem || example.question)
+    const solution = formatLessonValue(example.solution || example.answer)
+    lines.push([title, problem, solution].filter(Boolean).join('\n'))
+  })
+
+  const summary = formatLessonValue(content.summary)
+  if (summary) lines.push(summary)
+  return lines.filter(Boolean).join('\n\n')
 }
 
 function normalizeList(value) {
@@ -1853,6 +1897,41 @@ watch(() => [props.pathId, props.nodeId], () => {
 }
 .feedback-box.ok { background: var(--success-light); border: 1px solid var(--success); }
 .feedback-box.bad { background: var(--danger-light); border: 1px solid var(--danger); }
+.practice-intervention {
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  display: grid;
+  gap: 10px;
+  color: #78350f;
+  overflow-wrap: anywhere;
+}
+.practice-intervention-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+.practice-intervention p {
+  margin: 0;
+  line-height: 1.6;
+  color: #92400e;
+}
+.intervention-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.intervention-actions span {
+  border: 1px solid #fbbf24;
+  background: #fff7ed;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  color: #78350f;
+}
 .action-row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .checkpoint-result {
   text-align: center;

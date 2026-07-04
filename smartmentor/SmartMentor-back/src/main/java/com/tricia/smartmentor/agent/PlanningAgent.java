@@ -2,12 +2,17 @@ package com.tricia.smartmentor.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tricia.smartmentor.service.LlmService;
+import com.tricia.smartmentor.service.KnowledgeGraphService;
+import com.tricia.smartmentor.service.KnowledgeGraphService.KnowledgeNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 个性化学习路径规划 Agent。
@@ -20,8 +25,13 @@ import java.util.Map;
 @Component
 public class PlanningAgent extends BaseAgent {
 
-    public PlanningAgent(LlmService llmService, ObjectMapper objectMapper) {
+    private final KnowledgeGraphService knowledgeGraphService;
+
+    public PlanningAgent(LlmService llmService,
+                         ObjectMapper objectMapper,
+                         KnowledgeGraphService knowledgeGraphService) {
         super(llmService, objectMapper);
+        this.knowledgeGraphService = knowledgeGraphService;
     }
 
     @Override
@@ -152,6 +162,41 @@ public class PlanningAgent extends BaseAgent {
             int actual = (learningPath == null) ? 0 : learningPath.size();
             return AgentResponse.failure(
                     String.format("学习路径规划不足：至少需要3个节点，当前仅%d个", actual));
+        }
+
+        Map<String, Integer> positionByNodeId = new HashMap<>();
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < learningPath.size(); i++) {
+            String nodeId = learningPath.get(i) != null ? learningPath.get(i).trim() : "";
+            if (nodeId.isBlank()) {
+                return AgentResponse.failure("学习路径规划无效：存在空知识点ID");
+            }
+            if (!seen.add(nodeId)) {
+                return AgentResponse.failure("学习路径规划无效：存在重复知识点 " + nodeId);
+            }
+            KnowledgeNode node = knowledgeGraphService.getNode(nodeId);
+            if (node == null) {
+                return AgentResponse.failure("学习路径规划无效：知识点不在知识图谱中 " + nodeId);
+            }
+            learningPath.set(i, nodeId);
+            positionByNodeId.put(nodeId, i);
+        }
+
+        for (String nodeId : learningPath) {
+            KnowledgeNode node = knowledgeGraphService.getNode(nodeId);
+            List<String> prerequisites = node.getPrerequisites();
+            if (prerequisites == null || prerequisites.isEmpty()) {
+                continue;
+            }
+            int nodePosition = positionByNodeId.get(nodeId);
+            for (String prerequisiteId : prerequisites) {
+                Integer prerequisitePosition = positionByNodeId.get(prerequisiteId);
+                if (prerequisitePosition != null && prerequisitePosition > nodePosition) {
+                    return AgentResponse.failure(String.format(
+                            "学习路径规划无效：前置知识点顺序倒置，%s 应早于 %s",
+                            prerequisiteId, nodeId));
+                }
+            }
         }
 
         String message = String.format("学习路径生成完成，共%d个知识点节点", learningPath.size());

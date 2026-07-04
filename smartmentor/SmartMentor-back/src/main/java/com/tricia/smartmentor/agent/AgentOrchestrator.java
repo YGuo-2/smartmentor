@@ -38,10 +38,10 @@ public class AgentOrchestrator {
             new EnumMap<>(AgentEvent.class);
 
     /**
-     * 防止事件链路无限递归的最大触发轮次。
+     * 防止事件链路无限递归的最大事件触发数。
      * 超过此值后，即使 AgentResponse 携带新事件，也不再级联触发。
      */
-    private static final int MAX_COLLABORATION_ROUNDS = 10;
+    private static final int MAX_EVENT_TRIGGERS = 10;
 
     // ------------------------------------------------------------------ 注册 API
 
@@ -73,7 +73,7 @@ public class AgentOrchestrator {
      * 级联规则：
      * <ul>
      *   <li>若某处理器返回的 {@code AgentResponse} 中携带非 null 的 {@code event} 字段，
-     *       且当前已触发事件总数未超过 {@link #MAX_COLLABORATION_ROUNDS}，
+     *       且当前已触发事件总数未超过 {@link #MAX_EVENT_TRIGGERS}，
      *       则自动触发该后续事件。</li>
      *   <li>为防止同一事件重复触发导致死循环，已在 {@link AgentContext#getEvents()} 中
      *       记录历史，调用方可通过 {@link AgentContext#hasEventFired} 自行判断。</li>
@@ -84,7 +84,7 @@ public class AgentOrchestrator {
      * @return 本次事件及所有级联事件产生的 AgentResponse 列表
      */
     public List<AgentResponse> fireEvent(AgentEvent event, AgentContext context) {
-        log.info("触发事件: {}, studentId={}, 已触发轮次={}", event, context.getStudentId(), context.getEvents().size());
+        log.info("触发事件: {}, studentId={}, 已触发事件数={}", event, context.getStudentId(), context.getEvents().size());
         context.getEvents().add(event);
 
         List<Function<AgentContext, AgentResponse>> handlers = eventHandlers.get(event);
@@ -104,14 +104,14 @@ public class AgentOrchestrator {
                 context.getSessionData().putAll(response.getData());
             }
 
-            // 级联事件：未超过最大轮次且携带新事件
+            // 级联事件：未超过最大事件触发数且携带新事件
             if (response.getEvent() != null
-                    && context.getEvents().size() < MAX_COLLABORATION_ROUNDS) {
+                    && context.getEvents().size() < MAX_EVENT_TRIGGERS) {
                 log.debug("事件 {} 触发级联事件 {}", event, response.getEvent());
                 List<AgentResponse> cascaded = fireEvent(response.getEvent(), context);
                 responses.addAll(cascaded);
             } else if (response.getEvent() != null) {
-                log.warn("已达最大协作轮次 {}，跳过级联事件 {}", MAX_COLLABORATION_ROUNDS, response.getEvent());
+                log.warn("已达最大事件触发数 {}，跳过级联事件 {}", MAX_EVENT_TRIGGERS, response.getEvent());
             }
         }
 

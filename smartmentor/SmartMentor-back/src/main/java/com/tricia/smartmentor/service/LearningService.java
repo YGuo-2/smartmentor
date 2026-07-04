@@ -58,6 +58,7 @@ public class LearningService {
     private final AnimationAiService animationAiService;
     private static final String[] OPTION_KEY_FALLBACKS = {"A", "B", "C", "D", "E", "F"};
     private static final int LESSON_AGENT_TIMEOUT_SECONDS = 45;
+    private static final int CONSECUTIVE_ERROR_THRESHOLD = 3;
     /**
      * 课程快照结构版本号。每当课程快照的数据结构或生成逻辑发生变化、导致旧快照不再符合
      * 预期时，将此值 +1：读取时版本不匹配的旧快照会被视为未命中并自动重新生成，
@@ -2618,7 +2619,7 @@ public class LearningService {
         Map<String, Object> targetNode = nodes.stream()
                 .filter(n -> nodeId.equals(n.get("nodeId")))
                 .findFirst()
-                .orElse(Collections.emptyMap());
+                .orElseThrow(() -> new BusinessException(404, "节点不存在"));
 
         String kpId = (String) targetNode.getOrDefault("knowledgePointId", nodeId);
         String kpName = (String) targetNode.getOrDefault("knowledgePointName", resolveKpName(kpId));
@@ -2631,11 +2632,13 @@ public class LearningService {
         String correctAnswer = findCorrectAnswer(path, nodeId, exerciseId);
         boolean isCorrect = answer != null && answer.trim().equalsIgnoreCase(correctAnswer.trim());
 
-        String moduleName = Optional.ofNullable(knowledgeGraphService.getNode(kpId))
-                .map(KnowledgeNode::getModule)
-                .orElse("高校课程");
+        KnowledgeNode kpNode = knowledgeGraphService.getNode(kpId);
+        String moduleName = Optional.ofNullable(kpNode).map(KnowledgeNode::getModule).orElse("高校课程");
         double newMastery = masteryUpdateService.updateFromAnswer(
                 studentId, kpId, moduleName, isCorrect, "practice");
+        LocalDateTime practiceAt = LocalDateTime.now();
+        PracticeStateUpdate practiceState = updatePracticeState(
+                targetNode, isCorrect, exerciseId, practiceAt, CONSECUTIVE_ERROR_THRESHOLD);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("exerciseId", exerciseId);
@@ -2648,7 +2651,6 @@ public class LearningService {
 
         if (!isCorrect) {
             Map<String, Object> errorAnalysis = new LinkedHashMap<>();
-            KnowledgeNode kpNode = knowledgeGraphService.getNode(kpId);
             List<String> errorTypes = kpNode != null && kpNode.getErrorTypes() != null ? kpNode.getErrorTypes() : Collections.emptyList();
             errorAnalysis.put("errorType", !errorTypes.isEmpty() ? errorTypes.get(0) : "理解偏差");
             errorAnalysis.put("knowledgePoint", kpName);
@@ -2665,6 +2667,16 @@ public class LearningService {
         // 更新节点掌握度
         updateNodeMastery(path, nodes, nodeId, newMastery);
 
+        Map<String, Object> intervention = null;
+        if (practiceState.isInterventionTriggered()) {
+            intervention = triggerConsecutiveErrorIntervention(
+                    studentId, moduleName, kpId, kpName, kpNode, newMastery, practiceState);
+        }
+        result.put("consecutiveErrorCount", practiceState.getConsecutiveErrorCount());
+        result.put("consecutiveErrorThreshold", practiceState.getThreshold());
+        result.put("interventionTriggered", practiceState.isInterventionTriggered());
+        result.put("intervention", intervention);
+
         if (isCorrect) {
             result.put("encouragement", "做得好！继续保持这个势头！");
         } else {
@@ -2673,10 +2685,124 @@ public class LearningService {
 
         result.put("timeSpentSeconds", timeSpentSeconds);
 
-        path.setLastStudyAt(LocalDateTime.now());
+        path.setLastStudyAt(practiceAt);
         learningPathRepository.save(path);
 
         return result;
+    }
+
+    static PracticeStateUpdate updatePracticeState(Map<String, Object> node,
+                                                   boolean isCorrect,
+                                                   String exerciseId,
+                                                   LocalDateTime practicedAt,
+                                                   int threshold) {
+        int previousCount = intValue(node.get("consecutiveErrorCount"), 0);
+        int nextCount = isCorrect ? 0 : previousCount + 1;
+        boolean interventionTriggered = !isCorrect && previousCount < threshold && nextCount >= threshold;
+
+        node.put("consecutiveErrorCount", nextCount);
+        node.put("lastPracticeCorrect", isCorrect);
+        node.put("lastPracticeExerciseId", exerciseId);
+        node.put("lastPracticeAt", practicedAt != null ? practicedAt.toString() : LocalDateTime.now().toString());
+
+        return new PracticeStateUpdate(previousCount, nextCount, threshold, interventionTriggered);
+    }
+
+    private static int intValue(Object value, int defaultValue) {
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.parseInt(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return defaultValue;
+    }
+
+    private Map<String, Object> triggerConsecutiveErrorIntervention(Long studentId,
+                                                                    String moduleName,
+                                                                    String kpId,
+                                                                    String kpName,
+                                                                    KnowledgeNode kpNode,
+                                                                    double mastery,
+                                                                    PracticeStateUpdate practiceState) {
+        Map<String, Object> remedialContent = Collections.emptyMap();
+        try {
+            List<String> commonErrors = kpNode != null ? collectCommonErrors(kpNode) : Collections.emptyList();
+            String kpDesc = kpNode != null ? kpNode.getDescription() : "";
+            AgentContext context = buildTeachingContext(studentId, moduleName, kpId, kpName, kpDesc,
+                    Math.min(mastery, 0.35), commonErrors, TeachingAgent.SCOPE_EXPLAIN);
+            context.putSessionData("consecutiveErrorCount", practiceState.getConsecutiveErrorCount());
+            context.putSessionData("consecutiveErrorThreshold", practiceState.getThreshold());
+            List<AgentResponse> responses = orchestrator.fireEvent(AgentEvent.CONSECUTIVE_ERRORS, context);
+            AgentResponse response = responses.isEmpty() ? null : responses.get(0);
+            if (response != null && response.isSuccess() && response.getData() != null) {
+                remedialContent = response.getData();
+            } else if (response != null) {
+                log.warn("CONSECUTIVE_ERRORS 教学干预生成失败，回落静态建议: {}", response.getMessage());
+            }
+        } catch (Exception e) {
+            log.warn("CONSECUTIVE_ERRORS 教学干预触发失败，回落静态建议: {}", e.getMessage());
+        }
+        return buildPracticeIntervention(kpId, kpName, practiceState, remedialContent);
+    }
+
+    private Map<String, Object> buildPracticeIntervention(String kpId,
+                                                          String kpName,
+                                                          PracticeStateUpdate practiceState,
+                                                          Map<String, Object> remedialContent) {
+        List<String> actions = Arrays.asList(
+                "先回看「" + kpName + "」的核心概念和易错点",
+                "按提示订正刚才的错题，写出错误原因",
+                "完成一题更基础的变式练习后再继续"
+        );
+
+        Map<String, Object> intervention = new LinkedHashMap<>();
+        intervention.put("type", "consecutive_errors");
+        intervention.put("message", String.format("你已在「%s」连续%d次答错，系统已切换为降难度干预。",
+                kpName, practiceState.getConsecutiveErrorCount()));
+        intervention.put("knowledgePointId", kpId);
+        intervention.put("knowledgePointName", kpName);
+        intervention.put("actions", actions);
+        if (remedialContent != null && !remedialContent.isEmpty()) {
+            intervention.put("remedialContent", remedialContent);
+        }
+        return intervention;
+    }
+
+    static final class PracticeStateUpdate {
+        private final int previousConsecutiveErrorCount;
+        private final int consecutiveErrorCount;
+        private final int threshold;
+        private final boolean interventionTriggered;
+
+        PracticeStateUpdate(int previousConsecutiveErrorCount,
+                            int consecutiveErrorCount,
+                            int threshold,
+                            boolean interventionTriggered) {
+            this.previousConsecutiveErrorCount = previousConsecutiveErrorCount;
+            this.consecutiveErrorCount = consecutiveErrorCount;
+            this.threshold = threshold;
+            this.interventionTriggered = interventionTriggered;
+        }
+
+        int getPreviousConsecutiveErrorCount() {
+            return previousConsecutiveErrorCount;
+        }
+
+        int getConsecutiveErrorCount() {
+            return consecutiveErrorCount;
+        }
+
+        int getThreshold() {
+            return threshold;
+        }
+
+        boolean isInterventionTriggered() {
+            return interventionTriggered;
+        }
     }
 
     /**

@@ -48,6 +48,8 @@ cd D:\Idea\中国软件杯\SmartMentor
 - Maven is the sole build tool for this project. Use `mvnw.cmd` for building, testing, and demo startup.
 - `target/` is build output and should not be committed.
 - Generated directories across both repos can be reviewed with `..\scripts\clean-generated.ps1` and removed with `..\scripts\clean-generated.ps1 -Apply`.
+- Agent 协作分为事件链路和专职生成器两类。事件协作主链是 `DiagnosticAgent -> TracingAgent -> PlanningAgent -> TeachingAgent/EvaluationAgent`；`ProfileAgent`、`PresentationAgent`、`ResourceAgent` 是由 Service 编排调用的专职生成器，不等同于每条事件链都会自动经过的节点。
+- 诊断 -> 溯源 -> 规划保留用户在环节奏：学生先查看溯源结果，再生成学习路径，这是教育场景下的产品设计。自动干预链路用于检查点失败（`MASTERY_NOT_REACHED`）和同一路径节点连续练习错误（`CONSECUTIVE_ERRORS`）。`NEW_WEAKNESS_FOUND` 仍是预留事件，不应作为已落地自动能力宣传。
 - The AI lesson exercises are snapshotted on the learning path before answer submission, so exercise grading uses server-side data instead of client-provided answers.
 - Checkpoint submission also grades against server-side lesson snapshots; client-provided `correctAnswer` values are ignored.
 - Diagnostic questions are also saved as server-side snapshots on `diagnostic_session`, so grading does not depend on frontend state or Redis availability.

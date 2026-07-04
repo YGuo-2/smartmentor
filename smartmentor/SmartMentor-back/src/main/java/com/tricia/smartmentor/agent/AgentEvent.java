@@ -28,7 +28,7 @@ public enum AgentEvent {
     /** 评估 Agent 判定学生已掌握当前知识点 */
     MASTERY_REACHED,
 
-    /** 检测到学生在同一题型连续出错 */
+    /** 检测到学生在同一路径节点连续练习出错 */
     CONSECUTIVE_ERRORS,
 
     /** 在教学过程中发现新的薄弱点 */
